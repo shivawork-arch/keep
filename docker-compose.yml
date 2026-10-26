@@ -31,7 +31,7 @@ services:
       - ollama_data:/root/.ollama
 
   n8n:
-    image: n8nio/n8n:1.123.88
+    image: n8nio/n8n:2.44.7
     restart: unless-stopped
     ports:
       - "5678:5678"
