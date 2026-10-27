@@ -17,6 +17,16 @@ class FakeCollection:
         doc = self.docs.get(filter["_id"])
         return dict(doc) if doc else None
 
+    def find(self, filter):
+        ids = set(filter["_id"]["$in"])
+        docs = [dict(d) for k, d in self.docs.items() if k in ids]
+
+        async def gen():
+            for d in docs:
+                yield d
+
+        return gen()
+
     async def find_one_and_update(self, filter, update, upsert, return_document):
         key = filter["_id"]
         doc = self.docs.setdefault(key, {"_id": key, "seq": 0})
@@ -30,15 +40,22 @@ class FakeDB:
         self.counters = FakeCollection()
 
 
+class FakeResult:
+    def __init__(self, records):
+        self.records = records
+
+
 class FakeDriver:
-    def __init__(self, fail=False):
+    def __init__(self, fail=False, records=None):
         self.calls = []
         self.fail = fail
+        self.records = records or []
 
     async def execute_query(self, query, **params):
         if self.fail:
             raise ConnectionError("neo4j down")
         self.calls.append((query, params))
+        return FakeResult(self.records)
 
 
 class FakeEmbedder:
@@ -53,3 +70,7 @@ class FakeEmbedder:
             raise EmbeddingError("ollama down")
         self.texts.append(text)
         return [0.5] * self.dim
+
+    async def embed_query(self, text):
+        self.texts.append(("query", text))
+        return [0.25] * self.dim

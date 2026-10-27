@@ -1,0 +1,10 @@
+{
+  "title": "Fixed retry intervals",
+  "decision": "Use fixed retry intervals instead of exponential backoff",
+  "rejected": "Exponential backoff",
+  "reason": "Thundering herd at 1000+ concurrent requests",
+  "future_implication": "No exponential backoff in retry logic",
+  "source": {"type": "pr", "url": "https://github.com/shivawork-arch/keep/pull/1", "ref": "1"},
+  "decided_by": ["shivawork-arch"],
+  "files": ["src/api/retry.py"]
+}
