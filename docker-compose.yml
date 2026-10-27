@@ -38,6 +38,8 @@ services:
     environment:
       TZ: Asia/Dubai
       GENERIC_TIMEZONE: Asia/Dubai
+      # Public address GitHub uses to reach n8n webhooks (the tunnel URL). Must end with /
+      WEBHOOK_URL: ${N8N_WEBHOOK_URL}
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:
