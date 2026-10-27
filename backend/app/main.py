@@ -3,6 +3,7 @@ from contextlib import asynccontextmanager
 
 import httpx
 from fastapi import FastAPI, HTTPException, Request
+from pydantic import BaseModel
 from neo4j import AsyncGraphDatabase
 from pymongo import AsyncMongoClient
 
@@ -11,7 +12,8 @@ from app.embeddings import Embedder
 from app.ids import Kind, parse_id
 from app.models import Decision, DecisionIn
 from app.search import SearchHit, SearchRequest, search_decisions
-from app.store import ensure_schema, get_decision, save_decision
+from app.sync import RepairResult, SyncReport, repair, sync_check
+from app.store import LinkError, ensure_schema, get_decision, link_decisions, save_decision
 
 log = logging.getLogger("keep")
 DB_NAME = "keep"
@@ -104,3 +106,27 @@ async def read_decision(decision_id: str, request: Request) -> Decision:
 async def search(req: SearchRequest, request: Request) -> list[SearchHit]:
     state = request.app.state
     return await search_decisions(state.db, state.neo4j, state.embedder, req)
+
+
+class LinkRequest(BaseModel):
+    depends_on: str
+
+
+@app.post("/decisions/{decision_id}/links")
+async def add_link(decision_id: str, body: LinkRequest, request: Request) -> Decision:
+    state = request.app.state
+    try:
+        return await link_decisions(state.db, state.neo4j, decision_id, body.depends_on)
+    except LinkError as e:
+        raise HTTPException(409 if str(e).startswith("Loop") else 400, str(e))
+
+
+@app.get("/sync/check")
+async def check_sync(request: Request) -> SyncReport:
+    return await sync_check(request.app.state.db, request.app.state.neo4j)
+
+
+@app.post("/sync/repair")
+async def repair_sync(request: Request) -> RepairResult:
+    state = request.app.state
+    return await repair(state.db, state.neo4j, state.embedder)

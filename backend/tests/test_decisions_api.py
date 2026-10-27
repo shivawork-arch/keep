@@ -54,3 +54,18 @@ def test_missing_is_404(client):
 @pytest.mark.parametrize("bad", ["123", "LORE-001", "KEEP-P-001"])
 def test_bad_id_is_400(client, bad):
     assert client.get(f"/decisions/{bad}").status_code == 400
+
+
+def test_link_endpoint_and_loop_is_409(client):
+    client.post("/decisions", json=BODY)
+    client.post("/decisions", json=BODY)
+    ok = client.post("/decisions/KEEP-D-002/links", json={"depends_on": "KEEP-D-001"})
+    assert ok.status_code == 200
+    assert ok.json()["depends_on"] == ["KEEP-D-001"]
+    loop = client.post("/decisions/KEEP-D-001/links", json={"depends_on": "KEEP-D-002"})
+    assert loop.status_code == 409
+
+
+def test_link_to_missing_is_400(client):
+    client.post("/decisions", json=BODY)
+    assert client.post("/decisions/KEEP-D-001/links", json={"depends_on": "KEEP-D-404"}).status_code == 400

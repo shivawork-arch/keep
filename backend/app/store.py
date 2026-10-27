@@ -114,3 +114,68 @@ async def save_decision(db, driver, embedder: Embedder, data: DecisionIn) -> Dec
 async def get_decision(db, decision_id: str) -> Decision | None:
     doc = await db.decisions.find_one({"_id": decision_id})
     return from_mongo(doc) if doc else None
+
+
+class LinkError(ValueError):
+    pass
+
+
+LINK_QUERY = """
+MATCH (a:Decision {id: $source}), (b:Decision {id: $target})
+MERGE (a)-[:DEPENDS_ON]->(b)
+"""
+
+
+async def _depends_on_path(db, start: str, goal: str) -> bool:
+    """True if `start` already depends on `goal`, directly or through other decisions."""
+    seen, stack = set(), [start]
+    while stack:
+        current = stack.pop()
+        if current == goal:
+            return True
+        if current in seen:
+            continue
+        seen.add(current)
+        doc = await db.decisions.find_one({"_id": current})
+        if doc:
+            stack.extend(doc.get("depends_on", []))
+    return False
+
+
+async def link_decisions(db, driver, source: str, target: str) -> Decision:
+    """Record that `source` depends on `target` (so `target` blocks `source`).
+
+    Both sides are written together; the graph holds one DEPENDS_ON edge.
+    """
+    if source == target:
+        raise LinkError("A decision cannot depend on itself")
+    a = await db.decisions.find_one({"_id": source})
+    b = await db.decisions.find_one({"_id": target})
+    missing = [i for i, doc in ((source, a), (target, b)) if doc is None]
+    if missing:
+        raise LinkError(f"Not found: {', '.join(missing)}")
+    if target in a.get("depends_on", []):
+        return from_mongo(a)  # already linked; nothing to do
+    if await _depends_on_path(db, target, source):
+        raise LinkError(f"Loop: {target} already depends on {source}")
+
+    now = datetime.now(timezone.utc)
+    await db.decisions.update_one(
+        {"_id": source},
+        {"$addToSet": {"depends_on": target},
+         "$push": {"history": {"at": now, "change": f"depends on {target}"}}},
+    )
+    await db.decisions.update_one(
+        {"_id": target},
+        {"$addToSet": {"blocks": source},
+         "$push": {"history": {"at": now, "change": f"blocks {source}"}}},
+    )
+
+    try:
+        await driver.execute_query(LINK_QUERY, source=source, target=target)
+    except Exception as e:
+        log.warning("Graph link failed %s -> %s, marking needs_sync: %s", source, target, e)
+        for i in (source, target):
+            await db.decisions.update_one({"_id": i}, {"$set": {"needs_sync": True}})
+
+    return await get_decision(db, source)
