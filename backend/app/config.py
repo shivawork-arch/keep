@@ -15,3 +15,5 @@ class Settings(BaseSettings):
     neo4j_user: str
     neo4j_password: str
     ollama_url: str
+    embed_model: str = "nomic-embed-text"
+    embed_dim: int = 768  # must match the Neo4j vector index
