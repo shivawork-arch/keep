@@ -17,3 +17,5 @@ class Settings(BaseSettings):
     ollama_url: str
     embed_model: str = "nomic-embed-text"
     embed_dim: int = 768  # must match the Neo4j vector index
+    github_webhook_secret: str
+    n8n_router_url: str = "http://localhost:5678/webhook/github"

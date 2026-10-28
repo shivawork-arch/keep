@@ -3,7 +3,7 @@ services:
     image: mongo:9.0.4
     restart: unless-stopped
     ports:
-      - "27017:27017"
+      - "127.0.0.1:27017:27017"
     environment:
       MONGO_INITDB_ROOT_USERNAME: ${MONGO_ROOT_USER}
       MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD}
@@ -14,8 +14,8 @@ services:
     image: neo4j:5.26.32-community
     restart: unless-stopped
     ports:
-      - "7474:7474"
-      - "7687:7687"
+      - "127.0.0.1:7474:7474"
+      - "127.0.0.1:7687:7687"
     environment:
       NEO4J_AUTH: ${NEO4J_USER}/${NEO4J_PASSWORD}
     volumes:
@@ -26,7 +26,7 @@ services:
     image: ollama/ollama:0.40.11
     restart: unless-stopped
     ports:
-      - "11434:11434"
+      - "127.0.0.1:11434:11434"
     volumes:
       - ollama_data:/root/.ollama
 
@@ -34,11 +34,11 @@ services:
     image: n8nio/n8n:2.44.7
     restart: unless-stopped
     ports:
-      - "5678:5678"
+      - "127.0.0.1:5678:5678"
     environment:
       TZ: Asia/Dubai
       GENERIC_TIMEZONE: Asia/Dubai
-      # Public address GitHub uses to reach n8n webhooks (the tunnel URL). Must end with /
+      # Base address n8n shows for its webhooks. Local: GitHub goes through FastAPI first.
       WEBHOOK_URL: ${N8N_WEBHOOK_URL}
     extra_hosts:
       - "host.docker.internal:host-gateway"

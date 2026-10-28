@@ -1,20 +1,33 @@
-# Start a Cloudflare quick tunnel to n8n, put its URL in .env, restart n8n, check it works.
-# Run from anywhere:  powershell -ExecutionPolicy Bypass -File C:\Users\shiva\keep\scripts\tunnel.ps1
+# Start a Cloudflare quick tunnel to FastAPI (the GitHub front door) and check it works.
+# GitHub -> tunnel -> FastAPI /github/webhook (signature check) -> n8n on localhost.
+# Run:  powershell -ExecutionPolicy Bypass -File C:\Users\shiva\keep\scripts\tunnel.ps1
+# Needs uvicorn running on port 8000.
 
 $ErrorActionPreference = "Stop"
-$root = Split-Path $PSScriptRoot -Parent
-$envFile = Join-Path $root ".env"
 $log = Join-Path $env:TEMP "keep-tunnel.log"
+
+try { Invoke-RestMethod "http://localhost:8000/health" -TimeoutSec 3 | Out-Null }
+catch { throw "FastAPI is not running on :8000. Start uvicorn first." }
 
 # Stop any old tunnel so only one runs.
 Get-Process cloudflared -ErrorAction SilentlyContinue | Stop-Process -Force
 if (Test-Path $log) { Remove-Item $log }
 
+# Find cloudflared even if this window's PATH is out of date.
+$cf = (Get-Command cloudflared -ErrorAction SilentlyContinue).Source
+if (-not $cf) {
+    $cf = @(
+        "${env:ProgramFiles(x86)}\cloudflared\cloudflared.exe",
+        "$env:ProgramFiles\cloudflared\cloudflared.exe",
+        "$env:LOCALAPPDATA\Microsoft\WinGet\Links\cloudflared.exe"
+    ) | Where-Object { Test-Path $_ } | Select-Object -First 1
+}
+if (-not $cf) { throw "cloudflared not found. Install: winget install --id Cloudflare.cloudflared -e" }
+
 Write-Host "Starting tunnel..."
-Start-Process cloudflared -ArgumentList "tunnel --url http://localhost:5678" `
+Start-Process $cf -ArgumentList "tunnel --url http://localhost:8000" `
     -RedirectStandardError $log -WindowStyle Hidden
 
-# cloudflared prints the URL within a few seconds.
 $url = $null
 for ($i = 0; $i -lt 30 -and -not $url; $i++) {
     Start-Sleep -Seconds 1
@@ -26,26 +39,15 @@ for ($i = 0; $i -lt 30 -and -not $url; $i++) {
 if (-not $url) { throw "No tunnel URL after 30s. See $log" }
 Write-Host "Tunnel: $url"
 
-# Replace (or add) N8N_WEBHOOK_URL in .env.
-$lines = @(Get-Content $envFile | Where-Object { $_ -notmatch '^N8N_WEBHOOK_URL=' })
-$lines += "N8N_WEBHOOK_URL=$url/"
-Set-Content -Path $envFile -Value $lines
-
-Push-Location $root
-docker compose up -d n8n | Out-Null
-Pop-Location
-
-# New addresses take a little while to resolve.
 Write-Host "Waiting for the tunnel to answer..."
 for ($i = 0; $i -lt 24; $i++) {
     Start-Sleep -Seconds 5
     try {
-        $r = Invoke-RestMethod "$url/healthz" -TimeoutSec 5
-        if ($r.status -eq "ok") {
-            Write-Host "OK: n8n reachable at $url"
-            Write-Host "GitHub webhook URLs start with: $url/webhook/"
-            exit 0
-        }
+        Invoke-RestMethod "$url/health" -TimeoutSec 5 | Out-Null
+        Write-Host ""
+        Write-Host "OK. Set this as the GitHub webhook Payload URL:"
+        Write-Host "  $url/github/webhook"
+        exit 0
     } catch { }
 }
-throw "Tunnel started but $url/healthz did not answer in 2 minutes. See $log"
+throw "Tunnel started but $url/health did not answer in 2 minutes. See $log"

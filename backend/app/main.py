@@ -9,6 +9,7 @@ from pymongo import AsyncMongoClient
 
 from app.config import Settings
 from app.embeddings import Embedder
+from app.github_webhook import forward_to_n8n, is_valid_signature
 from app.ids import Kind, parse_id
 from app.models import Decision, DecisionIn
 from app.search import SearchHit, SearchRequest, search_decisions
@@ -130,3 +131,20 @@ async def check_sync(request: Request) -> SyncReport:
 async def repair_sync(request: Request) -> RepairResult:
     state = request.app.state
     return await repair(state.db, state.neo4j, state.embedder)
+
+
+@app.post("/github/webhook", status_code=202)
+async def github_webhook(request: Request) -> dict[str, str]:
+    settings = request.app.state.settings
+    body = await request.body()  # raw bytes: the signature is over these exactly
+    if not is_valid_signature(settings.github_webhook_secret, body,
+                              request.headers.get("x-hub-signature-256")):
+        raise HTTPException(401, "Bad or missing signature")
+    try:
+        status = await forward_to_n8n(settings.n8n_router_url, body, dict(request.headers))
+    except httpx.HTTPError as e:
+        # 502 makes the delivery show as failed in GitHub, so it can be redelivered.
+        raise HTTPException(502, f"n8n unreachable: {e}")
+    if status >= 400:
+        raise HTTPException(502, f"n8n answered {status}")
+    return {"status": "accepted"}
