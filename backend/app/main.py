@@ -7,9 +7,12 @@ from pydantic import BaseModel
 from neo4j import AsyncGraphDatabase
 from pymongo import AsyncMongoClient
 
+from app.claude import BudgetExceeded, Budget, ClaudeError, ClaudeResult, ask_claude
 from app.config import Settings
 from app.embeddings import Embedder
+from app.github_api import GitHub, GitHubError
 from app.github_webhook import forward_to_n8n, is_valid_signature
+from app.pr_review import ReviewOutcome, review_pr
 from app.ids import Kind, parse_id
 from app.models import Decision, DecisionIn
 from app.search import SearchHit, SearchRequest, search_decisions
@@ -148,3 +151,57 @@ async def github_webhook(request: Request) -> dict[str, str]:
     if status >= 400:
         raise HTTPException(502, f"n8n answered {status}")
     return {"status": "accepted"}
+
+
+@app.get("/budget")
+async def budget(request: Request) -> dict:
+    s = request.app.state.settings
+    return await Budget(request.app.state.db, s.daily_call_cap, s.daily_token_cap).usage()
+
+
+class PingRequest(BaseModel):
+    text: str = "Say OK"
+    structured: bool = False
+
+
+PING_SCHEMA = {"type": "object", "properties": {"ok": {"type": "boolean"}, "word": {"type": "string"}},
+               "required": ["ok", "word"]}
+
+
+@app.post("/claude/ping")
+async def claude_ping(body: PingRequest, request: Request) -> ClaudeResult:
+    """Smoke test for the Claude call path (cheap Haiku call, counted in the budget)."""
+    state = request.app.state
+    try:
+        return await ask_claude(
+            state.settings, state.db, "ping",
+            system="You are a health check. Answer in as few words as possible.",
+            prompt=body.text if not body.structured else "Return ok=true and one random word.",
+            schema=PING_SCHEMA if body.structured else None,
+        )
+    except BudgetExceeded as e:
+        raise HTTPException(429, str(e))
+    except ClaudeError as e:
+        raise HTTPException(502, str(e))
+
+
+class ReviewRequest(BaseModel):
+    repo: str
+    number: int
+    post: bool = True  # False = dry run: build the comment but do not post it
+
+
+@app.post("/agents/pr-review")
+async def pr_review(body: ReviewRequest, request: Request) -> ReviewOutcome:
+    state = request.app.state
+    try:
+        gh = GitHub(state.settings.github_token)
+    except GitHubError as e:
+        raise HTTPException(500, str(e))
+    try:
+        return await review_pr(state.settings, state.db, state.neo4j, state.embedder, gh,
+                               body.repo, body.number, post=body.post)
+    except (GitHubError, ClaudeError) as e:
+        raise HTTPException(502, str(e))
+    finally:
+        await gh.close()

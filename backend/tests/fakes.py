@@ -10,9 +10,15 @@ class FakeCollection:
             raise ValueError("duplicate _id")
         self.docs[doc["_id"]] = dict(doc)
 
-    async def update_one(self, filter, update):
+    async def update_one(self, filter, update, upsert=False):
+        if filter["_id"] not in self.docs:
+            if not upsert:
+                return
+            self.docs[filter["_id"]] = {"_id": filter["_id"]}
         doc = self.docs[filter["_id"]]
         doc.update(update.get("$set", {}))
+        for field, value in update.get("$inc", {}).items():
+            doc[field] = doc.get(field, 0) + value
         for field, value in update.get("$addToSet", {}).items():
             items = doc.setdefault(field, [])
             if value not in items:
@@ -25,12 +31,19 @@ class FakeCollection:
         return dict(doc) if doc else None
 
     def find(self, filter, projection=None):
-        if "_id" in filter:
-            ids = set(filter["_id"]["$in"])
-            docs = [dict(d) for k, d in self.docs.items() if k in ids]
-        else:
-            docs = [dict(d) for d in self.docs.values()
-                    if all(d.get(k) == v for k, v in filter.items())]
+        def matches(doc):
+            for field, cond in filter.items():
+                value = doc.get(field)
+                if isinstance(cond, dict) and "$in" in cond:
+                    wanted = set(cond["$in"])
+                    values = set(value) if isinstance(value, list) else {value}
+                    if not values & wanted:
+                        return False
+                elif value != cond:
+                    return False
+            return True
+
+        docs = [dict(d) for d in self.docs.values() if matches(d)]
 
         async def gen():
             for d in docs:
@@ -49,6 +62,8 @@ class FakeDB:
     def __init__(self):
         self.decisions = FakeCollection()
         self.counters = FakeCollection()
+        self.usage = FakeCollection()
+        self.pr_reviews = FakeCollection()
 
 
 class FakeResult:
