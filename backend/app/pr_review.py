@@ -186,11 +186,13 @@ def build_comment(conflicts: list[Conflict], decisions: dict[str, Decision], sum
                   f"**Decision:** {d.decision}  ",
                   *( [f"**Rejected:** {d.rejected}  "] if d.rejected else [] ),
                   f"**Why:** {d.reason}  ",
-                  f"**Decided by:** {', '.join('@' + p for p in d.decided_by)} in [{d.source.type.value} {d.source.ref}]({d.source.url})",
+                  f"**Decided by:** {', '.join('@' + p for p in d.decided_by)} in [{SOURCE_LABEL[d.source.type.value]} {d.source.ref}]({d.source.url})",
                   ""]
     lines += [REPLY_HELP, "", "— KEEP"]
     return "\n".join(lines)
 
+
+SOURCE_LABEL = {"pr": "PR", "issue": "issue", "comment": "comment", "commit": "commit"}
 
 NO_MEMORY_COMMENT = "**KEEP:** Nothing in memory touches this change. Skipped the deep review.\n\n— KEEP"
 
