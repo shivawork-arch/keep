@@ -1,0 +1,523 @@
+{
+  "name": "github router",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "github",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.2,
+      "position": [
+        0,
+        -64
+      ],
+      "id": "dd19d870-3888-40ea-bb05-4103f8142b63",
+      "name": "Webhook",
+      "webhookId": "1d3516ad-0e74-4bc1-9051-d0d7058c0d61"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 4
+          },
+          "conditions": [
+            {
+              "id": "da483dfa-d29c-4077-b654-27654a6521eb",
+              "leftValue": "={{ $json.headers[\"x-github-event\"] }}",
+              "rightValue": "ping",
+              "operator": {
+                "type": "string",
+                "operation": "notEquals"
+              }
+            },
+            {
+              "id": "f425c699-d33f-448b-a4b9-319529e34e4c",
+              "leftValue": "={{ $json.body.sender?.type }}",
+              "rightValue": "Bot",
+              "operator": {
+                "type": "string",
+                "operation": "notEquals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2.4,
+      "position": [
+        224,
+        64
+      ],
+      "id": "28777b5d-ad83-4f96-9734-3e3225b48832",
+      "name": "Filter"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 4
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.key }}",
+                    "rightValue": "^pull_request\\.(opened|reopened|synchronize)$",
+                    "operator": {
+                      "type": "string",
+                      "operation": "regex"
+                    },
+                    "id": "776086e8-88f5-4da4-8c00-38ef284e12fd"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "PR Review"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 4
+                },
+                "conditions": [
+                  {
+                    "id": "ec0df01b-d1e6-4a93-9d7e-5b753b3ba68d",
+                    "leftValue": "={{ $json.key }}",
+                    "rightValue": "pull_request.closed.merged",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Decision Extractor"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 4
+                },
+                "conditions": [
+                  {
+                    "id": "9258e84e-6896-411e-8ac6-8f7370a3d15e",
+                    "leftValue": "={{ $json.key }}",
+                    "rightValue": "issues.opened",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Pre-Mortem"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 4
+                },
+                "conditions": [
+                  {
+                    "id": "2eee3046-0f7e-448e-8273-8d320599a8af",
+                    "leftValue": "={{ $json.key }}",
+                    "rightValue": "issue_comment.created.command",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Reply Handler"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 4
+                },
+                "conditions": [
+                  {
+                    "id": "324ef50f-d0d1-49f2-bbce-3463368e15fa",
+                    "leftValue": "={{ $json.key }}",
+                    "rightValue": "push.",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Commit Keeper"
+            }
+          ]
+        },
+        "looseTypeValidation": true,
+        "options": {
+          "fallbackOutput": "none"
+        }
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.5,
+      "position": [
+        672,
+        16
+      ],
+      "id": "f155902c-5014-4549-982e-96a77ce82ab8",
+      "name": "Switch"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "d9f49814-31e7-4019-bf9e-4213fecaaeff",
+              "name": "key",
+              "value": "={{ $json.headers[\"x-github-event\"] + \".\" + ($json.body.action ?? \"\") + ($json.body.pull_request?.merged ? \".merged\" : \"\") + (($json.body.comment?.body ?? \"\").trim().toLowerCase().startsWith(\"keep:\") ? \".command\" : \"\") }}",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        464,
+        -48
+      ],
+      "id": "d88cd662-f4d6-4cb0-95d8-3f2bd1c9f974",
+      "name": "Edit Fields"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "7a92784d-ea1c-4b27-b73c-38dec2063321",
+              "name": "route",
+              "value": "PR Review",
+              "type": "string"
+            },
+            {
+              "id": "013bd2d3-90aa-442c-8a26-bf89791f5a4f",
+              "name": "repo",
+              "value": "={{ $json.body.repository?.full_name }}",
+              "type": "string"
+            },
+            {
+              "id": "d45d4b8c-df83-4c78-aeb0-48f4c70a7e8a",
+              "name": "number",
+              "value": "={{ $json.body.pull_request?.number ?? $json.body.issue?.number ?? \"\" }}",
+              "type": "string"
+            },
+            {
+              "id": "a6faf4ac-bc14-4445-b078-593cde1d2a83",
+              "name": "key",
+              "value": "={{ $json.key }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        992,
+        -256
+      ],
+      "id": "b9752d1e-6caf-438d-9a17-616d0efcbe87",
+      "name": "PR Review"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "7a92784d-ea1c-4b27-b73c-38dec2063321",
+              "name": "route",
+              "value": "Decision Extractor",
+              "type": "string"
+            },
+            {
+              "id": "013bd2d3-90aa-442c-8a26-bf89791f5a4f",
+              "name": "repo",
+              "value": "={{ $json.body.repository?.full_name }}",
+              "type": "string"
+            },
+            {
+              "id": "d45d4b8c-df83-4c78-aeb0-48f4c70a7e8a",
+              "name": "number",
+              "value": "={{ $json.body.pull_request?.number ?? $json.body.issue?.number ?? \"\" }}",
+              "type": "string"
+            },
+            {
+              "id": "a6faf4ac-bc14-4445-b078-593cde1d2a83",
+              "name": "key",
+              "value": "={{ $json.key }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        992,
+        -96
+      ],
+      "id": "ff29ce7c-8667-43e3-a909-b8a7a8475544",
+      "name": "Decision Extractor"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "7a92784d-ea1c-4b27-b73c-38dec2063321",
+              "name": "route",
+              "value": "Pre-Mortem",
+              "type": "string"
+            },
+            {
+              "id": "013bd2d3-90aa-442c-8a26-bf89791f5a4f",
+              "name": "repo",
+              "value": "={{ $json.body.repository?.full_name }}",
+              "type": "string"
+            },
+            {
+              "id": "d45d4b8c-df83-4c78-aeb0-48f4c70a7e8a",
+              "name": "number",
+              "value": "={{ $json.body.pull_request?.number ?? $json.body.issue?.number ?? \"\" }}",
+              "type": "string"
+            },
+            {
+              "id": "a6faf4ac-bc14-4445-b078-593cde1d2a83",
+              "name": "key",
+              "value": "={{ $json.key }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        992,
+        64
+      ],
+      "id": "438df703-7a5f-4c99-a983-7dad2abf0880",
+      "name": "Pre-Mortem"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "7a92784d-ea1c-4b27-b73c-38dec2063321",
+              "name": "route",
+              "value": "Reply Handler",
+              "type": "string"
+            },
+            {
+              "id": "013bd2d3-90aa-442c-8a26-bf89791f5a4f",
+              "name": "repo",
+              "value": "={{ $json.body.repository?.full_name }}",
+              "type": "string"
+            },
+            {
+              "id": "d45d4b8c-df83-4c78-aeb0-48f4c70a7e8a",
+              "name": "number",
+              "value": "={{ $json.body.pull_request?.number ?? $json.body.issue?.number ?? \"\" }}",
+              "type": "string"
+            },
+            {
+              "id": "a6faf4ac-bc14-4445-b078-593cde1d2a83",
+              "name": "key",
+              "value": "={{ $json.key }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        992,
+        224
+      ],
+      "id": "05152ed7-c41b-42b1-80ce-55e741949985",
+      "name": "Reply Handler"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "7a92784d-ea1c-4b27-b73c-38dec2063321",
+              "name": "route",
+              "value": "Commit Keeper",
+              "type": "string"
+            },
+            {
+              "id": "013bd2d3-90aa-442c-8a26-bf89791f5a4f",
+              "name": "repo",
+              "value": "={{ $json.body.repository?.full_name }}",
+              "type": "string"
+            },
+            {
+              "id": "d45d4b8c-df83-4c78-aeb0-48f4c70a7e8a",
+              "name": "number",
+              "value": "={{ $json.body.pull_request?.number ?? $json.body.issue?.number ?? \"\" }}",
+              "type": "string"
+            },
+            {
+              "id": "a6faf4ac-bc14-4445-b078-593cde1d2a83",
+              "name": "key",
+              "value": "={{ $json.key }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        992,
+        384
+      ],
+      "id": "8c57ba0b-91e7-4804-8b0e-fbd26478961c",
+      "name": "Commit Keeper"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Filter",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Fields": {
+      "main": [
+        [
+          {
+            "node": "Switch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Switch": {
+      "main": [
+        [
+          {
+            "node": "PR Review",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Decision Extractor",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Pre-Mortem",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Reply Handler",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Commit Keeper",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "69566532-2fe1-4078-9f5d-b4cd8edb1a3e",
+  "meta": {
+    "instanceId": "c198690174800170e1071c78c71278fad4d1a348a683f7726bb194a7bdf5b4b6"
+  },
+  "nodeGroups": [],
+  "id": "ott4w2B6iphOrVvv",
+  "tags": []
+}
