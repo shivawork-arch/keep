@@ -33,6 +33,7 @@ JOB_MODELS: dict[str, Tier] = {
     "pre_mortem": Tier.SONNET,
     "decision_extract": Tier.HAIKU,
     "reply_parse": Tier.HAIKU,
+    "override_write": Tier.HAIKU,
     "sort": Tier.HAIKU,
     "ping": Tier.HAIKU,
 }

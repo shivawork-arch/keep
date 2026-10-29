@@ -32,3 +32,4 @@ class Settings(BaseSettings):
     github_token: str | None = None
     review_k: int = 5             # max related decisions sent to Claude
     review_min_score: float = 0.0  # vector score floor; tuned once real decisions exist
+    duplicate_score: float = 0.97  # extractor skips a new decision this close to an existing one

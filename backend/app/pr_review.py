@@ -254,5 +254,7 @@ async def review_pr(settings, db, driver, embedder, gh, repo: str, number: int,
         outcome.comment_url = posted.get("html_url")
         merged = {**prev, **{f.path: f.patch_hash for f in todo}}
         await db.pr_reviews.update_one(
-            {"_id": key}, {"$set": {"files": [{"path": p, "hash": h} for p, h in merged.items()]}}, upsert=True)
+            {"_id": key}, {"$set": {"files": [{"path": p, "hash": h} for p, h in merged.items()],
+                                    "last_conflicts": [c.decision_id for c in outcome.conflicts]}},
+            upsert=True)
     return outcome

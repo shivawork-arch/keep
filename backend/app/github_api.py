@@ -39,6 +39,15 @@ class GitHub:
                 return files
             page += 1
 
+    async def issue_comments(self, repo: str, number: int) -> list[dict]:
+        return await self._req("GET", f"/repos/{repo}/issues/{number}/comments", params={"per_page": 100})
+
+    async def review_comments(self, repo: str, number: int) -> list[dict]:
+        return await self._req("GET", f"/repos/{repo}/pulls/{number}/comments", params={"per_page": 100})
+
+    async def issue(self, repo: str, number: int) -> dict:
+        return await self._req("GET", f"/repos/{repo}/issues/{number}")
+
     async def comment(self, repo: str, number: int, body: str) -> dict:
         return await self._req("POST", f"/repos/{repo}/issues/{number}/comments", json={"body": body})
 

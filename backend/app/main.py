@@ -13,6 +13,8 @@ from app.embeddings import Embedder
 from app.github_api import GitHub, GitHubError
 from app.github_webhook import forward_to_n8n, is_valid_signature
 from app.pr_review import ReviewOutcome, review_pr
+from app.decision_extractor import ExtractOutcome, ExtractRequest, extract
+from app.reply_handler import ReplyOutcome, ReplyRequest, handle_reply
 from app.ids import Kind, parse_id
 from app.models import Decision, DecisionIn
 from app.search import SearchHit, SearchRequest, search_decisions
@@ -205,3 +207,32 @@ async def pr_review(body: ReviewRequest, request: Request) -> ReviewOutcome:
         raise HTTPException(502, str(e))
     finally:
         await gh.close()
+
+
+async def _with_github(request: Request, fn):
+    """Run an agent with a GitHub client; map agent errors to clear HTTP errors."""
+    try:
+        gh = GitHub(request.app.state.settings.github_token)
+    except GitHubError as e:
+        raise HTTPException(500, str(e))
+    try:
+        return await fn(gh)
+    except BudgetExceeded as e:
+        raise HTTPException(429, str(e))
+    except (GitHubError, ClaudeError) as e:
+        raise HTTPException(502, str(e))
+    finally:
+        await gh.close()
+
+
+@app.post("/agents/decision-extractor")
+async def decision_extractor(body: ExtractRequest, request: Request) -> ExtractOutcome:
+    s = request.app.state
+    return await _with_github(request, lambda gh: extract(
+        s.settings, s.db, s.neo4j, s.embedder, gh, body.repo, body.number, post=body.post))
+
+
+@app.post("/agents/reply-handler")
+async def reply_handler(body: ReplyRequest, request: Request) -> ReplyOutcome:
+    s = request.app.state
+    return await _with_github(request, lambda gh: handle_reply(s.settings, s.db, s.neo4j, s.embedder, gh, body))

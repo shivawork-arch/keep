@@ -64,6 +64,7 @@ class FakeDB:
         self.counters = FakeCollection()
         self.usage = FakeCollection()
         self.pr_reviews = FakeCollection()
+        self.pr_extractions = FakeCollection()
 
 
 class FakeResult:

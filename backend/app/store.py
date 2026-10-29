@@ -179,3 +179,42 @@ async def link_decisions(db, driver, source: str, target: str) -> Decision:
             await db.decisions.update_one({"_id": i}, {"$set": {"needs_sync": True}})
 
     return await get_decision(db, source)
+
+
+STATUS_QUERY = "MATCH (d:Decision {id: $id}) SET d.status = $status"
+SUPERSEDES_QUERY = """
+MATCH (new:Decision {id: $new}), (old:Decision {id: $old})
+MERGE (new)-[:SUPERSEDES]->(old)
+"""
+
+
+async def supersede(db, driver, old_id: str, new_id: str) -> None:
+    """Mark old as superseded by new, and move old's links onto new (fixed rule, in code)."""
+    old = await get_decision(db, old_id)
+    if old is None:
+        raise LinkError(f"Not found: {old_id}")
+    now = datetime.now(timezone.utc)
+    await db.decisions.update_one(
+        {"_id": old_id},
+        {"$set": {"status": "superseded"},
+         "$push": {"history": {"at": now, "change": f"superseded by {new_id}"}}},
+    )
+    await db.decisions.update_one(
+        {"_id": new_id}, {"$push": {"history": {"at": now, "change": f"overrides {old_id}"}}})
+    # Links move: what old depended on, new now depends on; what depended on old now depends on new.
+    for target in old.depends_on:
+        if target != new_id:
+            await link_decisions(db, driver, new_id, target)
+    for dependent in old.blocks:
+        if dependent != new_id:
+            try:
+                await link_decisions(db, driver, dependent, new_id)
+            except LinkError as e:
+                log.warning("Could not move link %s -> %s: %s", dependent, new_id, e)
+    try:
+        await driver.execute_query(STATUS_QUERY, id=old_id, status="superseded")
+        await driver.execute_query(SUPERSEDES_QUERY, new=new_id, old=old_id)
+    except Exception as e:
+        log.warning("Graph supersede failed %s -> %s: %s", new_id, old_id, e)
+        for i in (old_id, new_id):
+            await db.decisions.update_one({"_id": i}, {"$set": {"needs_sync": True}})
