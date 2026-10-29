@@ -66,6 +66,7 @@ class FakeDB:
         self.pr_reviews = FakeCollection()
         self.pr_extractions = FakeCollection()
         self.patterns = FakeCollection()
+        self.commit_ledger = FakeCollection()
 
 
 class FakeResult:

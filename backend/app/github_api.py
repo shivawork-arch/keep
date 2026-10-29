@@ -48,6 +48,12 @@ class GitHub:
     async def issue(self, repo: str, number: int) -> dict:
         return await self._req("GET", f"/repos/{repo}/issues/{number}")
 
+    async def compare(self, repo: str, base: str, head: str) -> dict:
+        return await self._req("GET", f"/repos/{repo}/compare/{base}...{head}")
+
+    async def commit(self, repo: str, sha: str) -> dict:
+        return await self._req("GET", f"/repos/{repo}/commits/{sha}")
+
     async def comment(self, repo: str, number: int, body: str) -> dict:
         return await self._req("POST", f"/repos/{repo}/issues/{number}/comments", json={"body": body})
 

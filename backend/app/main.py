@@ -14,6 +14,8 @@ from app.github_api import GitHub, GitHubError
 from app.github_webhook import forward_to_n8n, is_valid_signature
 from app.pr_review import ReviewOutcome, review_pr
 from app.patterns import Pattern, PatternIn, save_pattern
+from app.pre_mortem import PreMortemOutcome, PreMortemRequest, pre_mortem
+from app.commit_keeper import CommitRequest, LedgerEntry, keep_commit
 from app.decision_extractor import ExtractOutcome, ExtractRequest, extract
 from app.reply_handler import ReplyOutcome, ReplyRequest, handle_reply
 from app.ids import Kind, parse_id
@@ -252,3 +254,28 @@ async def list_patterns(request: Request) -> list[Pattern]:
         doc["id"] = doc.pop("_id")
         out.append(Pattern(**doc))
     return out
+
+
+@app.post("/agents/pre-mortem")
+async def pre_mortem_agent(body: PreMortemRequest, request: Request) -> PreMortemOutcome:
+    s = request.app.state
+    return await _with_github(request, lambda gh: pre_mortem(
+        s.settings, s.db, s.neo4j, s.embedder, gh, body.repo, body.number, post=body.post))
+
+
+@app.post("/agents/commit-keeper")
+async def commit_keeper(body: CommitRequest, request: Request) -> LedgerEntry | dict:
+    s = request.app.state
+    entry = await _with_github(request, lambda gh: keep_commit(s.settings, s.db, s.neo4j, gh, body))
+    return entry or {"status": "skipped"}
+
+
+@app.get("/ledger")
+async def ledger(request: Request, limit: int = 20) -> list[dict]:
+    out = []
+    async for doc in request.app.state.db.commit_ledger.find({}):
+        doc = dict(doc)
+        doc["id"] = doc.pop("_id")
+        out.append(doc)
+    out.sort(key=lambda d: d["date"], reverse=True)
+    return out[:limit]
