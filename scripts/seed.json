@@ -1,20 +1,153 @@
-[
-  {
-    "title": "Fixed retry intervals",
-    "decision": "Use fixed retry intervals instead of exponential backoff",
-    "rejected": "Exponential backoff",
-    "reason": "Thundering herd at 1000+ concurrent requests",
-    "future_implication": "No exponential backoff in retry logic",
-    "source": {
-      "type": "pr",
-      "url": "https://github.com/shivawork-arch/keep/pull/1",
-      "ref": "1"
+{
+  "decisions": [
+    {
+      "title": "Fixed retry intervals for outbound calls",
+      "decision": "Retry failed outbound calls at a fixed 2 second interval, at most 3 times",
+      "rejected": "Exponential backoff",
+      "reason": "During the March payment-provider blip, 1,200 workers backed off in lockstep and hit the provider together when it recovered (thundering herd)",
+      "future_implication": "No exponential backoff in retry logic for live traffic; use the fixed-interval helper in src/api/retry.py",
+      "source": {"type": "pr", "url": "https://github.com/shivawork-arch/keep-sandbox", "ref": "seed"},
+      "decided_by": ["keep-demo-ana", "shivawork-arch"],
+      "files": ["src/api/retry.py", "src/payments/charge.py"],
+      "confidence": "HIGH"
     },
-    "decided_by": [
-      "shivawork-arch"
-    ],
-    "files": [
-      "src/api/retry.py"
-    ]
-  }
-]
+    {
+      "title": "Shared caches live in Redis",
+      "decision": "Cache anything shared between requests in Redis with a TTL",
+      "rejected": "Module-level dict or lru_cache",
+      "reason": "Each gunicorn worker kept its own copy, so users saw different data depending on which worker answered",
+      "future_implication": "No in-process caches for data shared between requests",
+      "source": {"type": "pr", "url": "https://github.com/shivawork-arch/keep-sandbox", "ref": "seed"},
+      "decided_by": ["shivawork-arch"],
+      "files": ["src/cache.py"],
+      "confidence": "HIGH"
+    },
+    {
+      "title": "Hash passwords with argon2id",
+      "decision": "Hash user passwords with argon2id using the passlib defaults",
+      "rejected": "SHA-256 with a salt",
+      "reason": "Fast hashes are cheap to brute-force on GPUs; argon2id is memory-hard",
+      "future_implication": "Never store or compare passwords with a fast hash or in plaintext",
+      "source": {"type": "pr", "url": "https://github.com/shivawork-arch/keep-sandbox", "ref": "seed"},
+      "decided_by": ["keep-demo-ravi"],
+      "files": ["src/auth/passwords.py"],
+      "confidence": "HIGH",
+      "security_relevant": true
+    },
+    {
+      "title": "Sessions in httpOnly cookies",
+      "decision": "Keep the session token in an httpOnly, Secure, SameSite=Lax cookie",
+      "rejected": "Bearer token in localStorage",
+      "reason": "Any XSS could read localStorage and steal sessions; httpOnly cookies are out of reach of scripts",
+      "future_implication": "Do not put session or auth tokens in localStorage or in JavaScript-readable storage",
+      "source": {"type": "pr", "url": "https://github.com/shivawork-arch/keep-sandbox", "ref": "seed"},
+      "decided_by": ["keep-demo-ravi", "keep-demo-lee"],
+      "files": ["src/auth/session.py"],
+      "confidence": "HIGH",
+      "security_relevant": true
+    },
+    {
+      "title": "Money as integer cents",
+      "decision": "Store and calculate money as integer cents",
+      "rejected": "Floats or decimals in dollars",
+      "reason": "Float rounding left refunds a cent off and the ledger stopped balancing",
+      "future_implication": "No float arithmetic on money; convert to cents at the edge",
+      "source": {"type": "pr", "url": "https://github.com/shivawork-arch/keep-sandbox", "ref": "seed"},
+      "decided_by": ["keep-demo-ana"],
+      "files": ["src/payments/models.py"],
+      "confidence": "HIGH"
+    },
+    {
+      "title": "Idempotency keys on charges",
+      "decision": "Every charge request carries an idempotency key, stored for 24 hours",
+      "rejected": "Relying on client-side de-duplication",
+      "reason": "Retries after timeouts charged some customers twice",
+      "future_implication": "Any code that creates a charge or refund must send an idempotency key",
+      "source": {"type": "pr", "url": "https://github.com/shivawork-arch/keep-sandbox", "ref": "seed"},
+      "decided_by": ["keep-demo-ana", "keep-demo-lee"],
+      "files": ["src/payments/charge.py"],
+      "confidence": "HIGH"
+    },
+    {
+      "title": "Cursor-based pagination",
+      "decision": "List endpoints page with an opaque cursor on (created_at, id)",
+      "rejected": "OFFSET/LIMIT page numbers",
+      "reason": "Deep pages got slow and rows shifted between pages while new orders came in",
+      "future_implication": "No OFFSET/LIMIT pagination on list endpoints; reuse the cursor helper",
+      "source": {"type": "pr", "url": "https://github.com/shivawork-arch/keep-sandbox", "ref": "seed"},
+      "decided_by": ["keep-demo-lee"],
+      "files": ["src/api/products.py"],
+      "confidence": "HIGH"
+    },
+    {
+      "title": "Store timestamps in UTC",
+      "decision": "Store every timestamp as timezone-aware UTC; convert only for display",
+      "rejected": "Server local time",
+      "reason": "A daylight-saving change made nightly order reports skip an hour",
+      "future_implication": "No naive datetimes and no local time in storage",
+      "source": {"type": "pr", "url": "https://github.com/shivawork-arch/keep-sandbox", "ref": "seed"},
+      "decided_by": ["shivawork-arch"],
+      "files": ["src/db/models.py"],
+      "confidence": "MEDIUM"
+    },
+    {
+      "title": "Backward-compatible migrations",
+      "decision": "Schema changes go expand first, contract in a later release",
+      "rejected": "Renaming or dropping columns in one migration",
+      "reason": "A column rename took checkout down for ten minutes while old pods were still running",
+      "future_implication": "Never rename or drop a column in the same release that stops using it",
+      "source": {"type": "pr", "url": "https://github.com/shivawork-arch/keep-sandbox", "ref": "seed"},
+      "decided_by": ["keep-demo-lee", "shivawork-arch"],
+      "files": ["migrations/README.md"],
+      "confidence": "HIGH"
+    },
+    {
+      "title": "One HTTP client: httpx",
+      "decision": "All outbound HTTP goes through httpx via src/clients/http.py",
+      "rejected": "requests and aiohttp side by side",
+      "reason": "Three clients meant three timeout and retry configs, and one of them had none",
+      "future_implication": "Do not add another HTTP client library; use src/clients/http.py",
+      "source": {"type": "pr", "url": "https://github.com/shivawork-arch/keep-sandbox", "ref": "seed"},
+      "decided_by": ["keep-demo-ravi"],
+      "files": ["src/clients/http.py"],
+      "confidence": "HIGH"
+    },
+    {
+      "title": "Timeouts on every external call",
+      "decision": "Every outbound call has a timeout, 5 seconds by default",
+      "rejected": "Library defaults (no timeout)",
+      "reason": "A hung shipping API held every worker for minutes and the shop went down",
+      "future_implication": "No outbound call without an explicit timeout",
+      "source": {"type": "pr", "url": "https://github.com/shivawork-arch/keep-sandbox", "ref": "seed"},
+      "decided_by": ["keep-demo-ravi", "shivawork-arch"],
+      "files": ["src/clients/http.py"],
+      "confidence": "HIGH"
+    }
+  ],
+  "links": [
+    ["KEEP-D-001", "KEEP-D-006"],
+    ["KEEP-D-001", "KEEP-D-011"],
+    ["KEEP-D-006", "KEEP-D-005"],
+    ["KEEP-D-011", "KEEP-D-010"]
+  ],
+  "patterns": [
+    {
+      "rule": "Use X | None instead of Optional[X]",
+      "anti_pattern": "typing.Optional[X]",
+      "language": "python",
+      "reason": "The codebase is on Python 3.11; one style for optional types",
+      "bad_example": "def find(id: int) -> Optional[User]:",
+      "good_example": "def find(id: int) -> User | None:",
+      "established_by": ["keep-demo-lee"]
+    },
+    {
+      "rule": "Log with the module logger, not print()",
+      "anti_pattern": "print() in application code",
+      "language": "python",
+      "reason": "print output skips log levels and never reaches the log pipeline",
+      "bad_example": "print(f\"charged {order_id}\")",
+      "good_example": "log.info(\"charged %s\", order_id)",
+      "established_by": ["keep-demo-ravi"]
+    }
+  ]
+}

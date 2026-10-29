@@ -6,7 +6,7 @@ import type { GraphEdge, GraphNode } from "@/lib/api";
 // "Wine and cheese" layout: files pinned in the left column, people pinned in the right column,
 // decisions in the middle, each placed near the files it governs. Incidents and pattern rules sit
 // beside the decision column.
-const COL = { file: 0, pattern: 360, decision: 700, incident: 1020, person: 1380 };
+const COL = { file: 0, decision: 640, incident: 960, person: 1280 };
 const GAP = 120;
 
 function layout(nodes: GraphNode[], edges: GraphEdge[]) {
@@ -47,7 +47,11 @@ function layout(nodes: GraphNode[], edges: GraphEdge[]) {
     id: p.id, y: avgY(edges.filter((e) => e.source === p.id).map((e) => e.target)) })), COL.person);
   spread(byKind("incident").map((n) => ({
     id: n.id, y: avgY(edges.filter((e) => e.source === n.id).map((e) => e.target)) })), COL.incident);
-  byKind("pattern").forEach((n, i) => pos.set(n.id, { x: COL.pattern, y: i * GAP }));
+  // Pattern rules are not tied to files: a row of their own above the decisions, off every line.
+  const top = Math.min(0, ...[...pos.values()].map((p) => p.y));
+  const rules = byKind("pattern");
+  rules.forEach((n, i) => pos.set(n.id, {
+    x: COL.decision + (i - (rules.length - 1) / 2) * 260, y: top - GAP * 1.4 }));
   return pos;
 }
 

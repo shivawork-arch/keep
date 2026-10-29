@@ -18,7 +18,7 @@ question, say so plainly and don't guess. "cited" lists every ID you used."""
 
 async def answer(settings, db, driver, embedder, question: str) -> tuple[str, list]:
     hits = await search_decisions(db, driver, embedder, SearchRequest(
-        text=question[:2000], k=8, min_score=settings.review_min_score, include_inactive=True))
+        text=question[:2000], k=8, min_score=0.0, include_inactive=True))  # loose wording: Claude judges
     if not hits:
         return "Nothing in memory about that yet.", []
     decisions = {h.decision.id: h.decision for h in hits}

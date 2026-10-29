@@ -75,7 +75,7 @@ async def link_incident(settings, db, driver, embedder, gh, req: IncidentRequest
 
     text = f"{issue.get('title')}\n{issue.get('body') or ''}"
     hits = await search_decisions(db, driver, embedder, SearchRequest(
-        text=text[:4000], k=6, min_score=settings.review_min_score, include_inactive=True))
+        text=text[:4000], k=6, min_score=0.0, include_inactive=True))  # incidents are worded loosely
     decisions = {h.decision.id: h.decision for h in hits}
     links, summary = [], ""
     if decisions:
