@@ -19,6 +19,7 @@ from app.pre_mortem import PreMortemOutcome, PreMortemRequest, pre_mortem
 from app.commit_keeper import CommitRequest, LedgerEntry, keep_commit
 from app.onboarding import brief
 from app.graph import graph
+from app.ask import answer
 from app.health_auditor import build_report
 from app.follow_up import FollowUpOutcome, FollowUpRequest, follow_up
 from app.incident_linker import IncidentOutcome, IncidentRequest, link_incident
@@ -66,7 +67,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="KEEP", lifespan=lifespan)
 # The dashboard (Next.js dev server) reads from the API in the browser.
-app.add_middleware(CORSMiddleware, allow_origins=["http://localhost:3000"], allow_methods=["GET"], allow_headers=["*"])
+app.add_middleware(CORSMiddleware, allow_origins=["http://localhost:3000"], allow_methods=["GET", "POST"], allow_headers=["*"])
 
 
 async def check_mongodb(client: AsyncMongoClient) -> bool:
@@ -359,3 +360,23 @@ async def stats(request: Request) -> dict:
         "commits": len([c async for c in db.commit_ledger.find({})]),
         "usage": await Budget(db, s.daily_call_cap, s.daily_token_cap).usage(),
     }
+
+
+class AskRequest(BaseModel):
+    question: str
+
+
+@app.post("/ask")
+async def ask_memory(body: AskRequest, request: Request) -> dict:
+    """Ask from the dashboard. Same path as `keep: ask` on GitHub, without posting anywhere."""
+    q = body.question.strip()
+    if len(q) < 3:
+        raise HTTPException(400, "Ask a full question.")
+    s = request.app.state
+    try:
+        text, cited = await answer(s.settings, s.db, s.neo4j, s.embedder, q[:1000])
+    except BudgetExceeded as e:
+        raise HTTPException(429, str(e))
+    except ClaudeError as e:
+        raise HTTPException(502, str(e))
+    return {"answer": text, "cited": [{"id": d.id, "title": d.title, "status": d.status.value} for d in cited]}

@@ -86,3 +86,28 @@ def test_onboard_command_posts_brief():
     gh = GH()
     out = run(handle_reply(S, FakeDB(), FakeDriver(), FakeEmbedder(), gh, req("keep: onboard")))
     assert out.action == "onboard" and "Memory is empty" in gh.posted[0]
+
+
+def test_ask_endpoint(monkeypatch):
+    from fastapi.testclient import TestClient
+    from app import main
+
+    async def fake_answer(settings, db, driver, embedder, q):
+        assert q == "why fixed retries?"
+        from app.models import Decision
+        d = Decision(id="KEEP-D-001", **dec_in().model_dump())
+        return "Thundering herd (KEEP-D-001).", [d]
+
+    monkeypatch.setattr(main, "answer", fake_answer)
+    main.app.state.settings = SimpleNamespace()
+    main.app.state.db, main.app.state.neo4j, main.app.state.embedder = FakeDB(), FakeDriver(), FakeEmbedder()
+    c = TestClient(main.app)
+    r = c.post("/ask", json={"question": "  why fixed retries?  "})
+    assert r.status_code == 200
+    assert r.json() == {"answer": "Thundering herd (KEEP-D-001).",
+                        "cited": [{"id": "KEEP-D-001", "title": "fixed retries", "status": "active"}]}
+    assert c.post("/ask", json={"question": "a"}).status_code == 400
+
+
+def dec_in():
+    return d("fixed retries", ["src/api/retry.py"])

@@ -58,3 +58,21 @@ export async function get<T>(path: string): Promise<T> {
   if (!r.ok) throw new Error(`${path} -> ${r.status}`);
   return r.json() as Promise<T>;
 }
+
+export interface AskAnswer {
+  answer: string;
+  cited: { id: string; title: string; status: string }[];
+}
+
+export async function ask(question: string): Promise<AskAnswer> {
+  const r = await fetch(`${API}/ask`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ question }),
+  });
+  if (!r.ok) {
+    const detail = await r.json().then((j) => j.detail).catch(() => r.statusText);
+    throw new Error(typeof detail === "string" ? detail : `Ask failed (${r.status})`);
+  }
+  return r.json() as Promise<AskAnswer>;
+}

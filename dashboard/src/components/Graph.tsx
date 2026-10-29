@@ -6,8 +6,8 @@ import type { GraphEdge, GraphNode } from "@/lib/api";
 // "Wine and cheese" layout: files pinned in the left column, people pinned in the right column,
 // decisions in the middle, each placed near the files it governs. Incidents and pattern rules sit
 // beside the decision column.
-const COL = { file: 0, pattern: 330, decision: 620, incident: 900, person: 1220 };
-const GAP = 90;
+const COL = { file: 0, pattern: 360, decision: 700, incident: 1020, person: 1380 };
+const GAP = 120;
 
 function layout(nodes: GraphNode[], edges: GraphEdge[]) {
   const pos = new Map<string, { x: number; y: number }>();
@@ -51,38 +51,60 @@ function layout(nodes: GraphNode[], edges: GraphEdge[]) {
   return pos;
 }
 
+const CHALK = "#eaf2fb", LINE = "#a9c7e8", RED = "#ff4f6d", AMBER = "#f2c14e", RULE = "#b9a6ff", PAPER = "#0a2444";
+
 const STYLE = [
   { selector: "node", style: {
-      label: "data(short)", color: "#e6edf3", "font-size": 11, "text-wrap": "wrap",
-      "text-max-width": "150px", "text-valign": "bottom", "text-margin-y": 6, "border-width": 0 } },
+      label: "data(short)", color: CHALK, "font-family": "Archivo, system-ui, sans-serif", "font-size": 15,
+      "text-wrap": "wrap", "text-max-width": "190px", "text-valign": "bottom", "text-margin-y": 8,
+      "text-background-color": PAPER, "text-background-opacity": 0.85, "text-background-padding": "3px",
+      "border-width": 2, "background-color": PAPER, "min-zoomed-font-size": 0 } },
   { selector: "node[kind = 'file']", style: {
-      shape: "round-rectangle", "background-color": "#1f6feb", width: 26, height: 18,
-      "text-halign": "right", "text-valign": "center", "text-margin-x": 8, "text-margin-y": 0 } },
+      shape: "rectangle", "border-color": LINE, width: 22, height: 22, "font-family": "IBM Plex Mono, monospace",
+      "font-size": 14, "text-halign": "right", "text-valign": "center", "text-margin-x": 10, "text-margin-y": 0 } },
   { selector: "node[kind = 'person']", style: {
-      shape: "ellipse", "background-color": "#d29922", width: 26, height: 26,
-      "text-halign": "left", "text-valign": "center", "text-margin-x": -8, "text-margin-y": 0 } },
-  { selector: "node[kind = 'decision']", style: { shape: "ellipse", "background-color": "#3fb950", width: 34, height: 34 } },
-  { selector: "node[kind = 'decision'][status != 'active']", style: { "background-color": "#6e7681", opacity: 0.7 } },
-  { selector: "node[decay = 'likely_outdated']", style: { "border-width": 3, "border-color": "#d29922" } },
-  { selector: "node[?security]", style: { "border-width": 3, "border-color": "#f85149" } },
-  { selector: "node[kind = 'pattern']", style: { shape: "hexagon", "background-color": "#a371f7", width: 28, height: 28 } },
-  { selector: "node[kind = 'incident']", style: { shape: "diamond", "background-color": "#f85149", width: 30, height: 30 } },
-  { selector: "node:selected", style: { "border-width": 4, "border-color": "#e6edf3" } },
-  { selector: "edge", style: { width: 1.5, "curve-style": "bezier", "line-color": "#30363d",
-      "target-arrow-shape": "triangle", "target-arrow-color": "#30363d", "arrow-scale": 0.8 } },
-  { selector: "edge[kind = 'GOVERNS']", style: { "line-color": "#1f6feb66", "target-arrow-color": "#1f6feb66" } },
-  { selector: "edge[kind = 'DECIDED']", style: { "line-color": "#d2992266", "target-arrow-color": "#d2992266" } },
-  { selector: "edge[kind = 'DEPENDS_ON']", style: { "line-color": "#3fb950", "target-arrow-color": "#3fb950", width: 2 } },
-  { selector: "edge[kind = 'SUPERSEDES']", style: { "line-color": "#8b949e", "target-arrow-color": "#8b949e",
-      "line-style": "dashed", width: 2 } },
-  { selector: "edge[kind = 'RELATES_TO']", style: { "line-color": "#f85149", "target-arrow-color": "#f85149", width: 2 } },
-  { selector: ".faded", style: { opacity: 0.12 } },
+      shape: "ellipse", "border-color": AMBER, "border-width": 3, width: 30, height: 30,
+      "text-halign": "left", "text-valign": "center", "text-margin-x": -10, "text-margin-y": 0, color: AMBER } },
+  { selector: "node[kind = 'decision']", style: {
+      shape: "ellipse", "background-color": CHALK, "border-color": CHALK, width: 46, height: 46, "font-weight": 600 } },
+  { selector: "node[kind = 'decision'][status != 'active']", style: {
+      "background-color": PAPER, "border-color": RED, "border-style": "dashed", "border-width": 3, color: "#c9d8ea" } },
+  { selector: "node[decay = 'likely_outdated']", style: { "border-color": AMBER, "border-width": 4 } },
+  { selector: "node[?security]", style: { "border-color": RED, "border-width": 5 } },
+  { selector: "node[kind = 'pattern']", style: {
+      shape: "hexagon", "background-color": RULE, "border-color": RULE, width: 34, height: 34, color: RULE } },
+  { selector: "node[kind = 'incident']", style: {
+      shape: "diamond", "background-color": RED, "border-color": RED, width: 38, height: 38, color: RED } },
+  { selector: "node:selected", style: { "overlay-color": CHALK, "overlay-opacity": 0.18, "overlay-padding": 8 } },
+  { selector: "edge", style: { width: 2, "curve-style": "bezier", "line-color": LINE, opacity: 0.45,
+      "target-arrow-shape": "triangle", "target-arrow-color": LINE, "arrow-scale": 1 } },
+  { selector: "edge[kind = 'DECIDED']", style: { "line-color": AMBER, "target-arrow-color": AMBER, opacity: 0.4 } },
+  { selector: "edge[kind = 'DEPENDS_ON']", style: { "line-color": CHALK, "target-arrow-color": CHALK, opacity: 0.9, width: 3 } },
+  { selector: "edge[kind = 'SUPERSEDES']", style: { "line-color": RED, "target-arrow-color": RED, opacity: 0.9,
+      "line-style": "dashed", width: 3 } },
+  { selector: "edge[kind = 'RELATES_TO']", style: { "line-color": RED, "target-arrow-color": RED, opacity: 0.9, width: 3 } },
+  { selector: ".faded", style: { opacity: 0.08 } },
+  { selector: "edge.lit", style: { opacity: 1 } },
 ];
 
-export default function Graph({ nodes, edges, onSelect }: {
-  nodes: GraphNode[]; edges: GraphEdge[]; onSelect: (n: GraphNode | null) => void;
+export default function Graph({ nodes, edges, onSelect, highlight }: {
+  nodes: GraphNode[]; edges: GraphEdge[]; onSelect: (n: GraphNode | null) => void; highlight?: string[];
 }) {
   const box = useRef<HTMLDivElement>(null);
+  const cyRef = useRef<import("cytoscape").Core | null>(null);
+
+  // Light up decisions an answer cited, plus everything directly connected to them.
+  useEffect(() => {
+    const cy = cyRef.current;
+    if (!cy) return;
+    cy.elements().removeClass("faded lit");
+    if (!highlight?.length) return;
+    const hit = cy.collection(highlight.map((id) => cy.getElementById(id)).filter((e) => e.nonempty()));
+    if (hit.empty()) return;
+    cy.elements().addClass("faded");
+    hit.closedNeighborhood().removeClass("faded");
+    hit.connectedEdges().addClass("lit");
+  }, [highlight]);
 
   useEffect(() => {
     let cy: import("cytoscape").Core | undefined;
@@ -102,24 +124,32 @@ export default function Graph({ nodes, edges, onSelect }: {
         ],
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         style: STYLE as any,
-        layout: { name: "preset", fit: true, padding: 40 },
+        layout: { name: "preset", fit: true, padding: 70 },
         wheelSensitivity: 0.3,
+        minZoom: 0.3,
+        maxZoom: 2.2,
       });
+      cyRef.current = cy;
+      if (cy.zoom() > 1.1) { cy.zoom(1.1); cy.center(); }
+      // Leave the bottom-right corner clear for the title block on wide screens.
+      if (box.current.clientWidth > 860) cy.panBy({ x: -140, y: -50 });
       cy.on("tap", "node", (evt) => {
         const n = evt.target;
-        cy!.elements().addClass("faded");
+        cy!.elements().addClass("faded").removeClass("lit");
         n.closedNeighborhood().removeClass("faded");
+        n.connectedEdges().addClass("lit");
         onSelect(nodes.find((x) => x.id === n.id()) ?? null);
       });
       cy.on("tap", (evt) => {
         if (evt.target === cy) {
-          cy!.elements().removeClass("faded");
+          cy!.elements().removeClass("faded lit");
           onSelect(null);
         }
       });
     })();
     return () => {
       cancelled = true;
+      cyRef.current = null;
       cy?.destroy();
     };
   }, [nodes, edges, onSelect]);
