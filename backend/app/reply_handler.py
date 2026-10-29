@@ -12,11 +12,13 @@ import re
 
 from pydantic import BaseModel
 
+from app.ask import answer, ask_comment
 from app.claude import ClaudeError, ask_claude
+from app.onboarding import brief
 from app.models import Confidence, DecisionIn, Origin
 from app.store import get_decision, save_decision, supersede
 
-COMMAND = re.compile(r"^\s*keep:\s*(intentional|accidental|discuss)\b(.*)$", re.IGNORECASE | re.DOTALL)
+COMMAND = re.compile(r"^\s*keep:\s*(intentional|accidental|discuss|ask|onboard)\b(.*)$", re.IGNORECASE | re.DOTALL)
 IDS = re.compile(r"KEEP-D-\d{3,}")
 REASON_SPLIT = re.compile(r"^[\s\-–—:]+")
 
@@ -31,7 +33,7 @@ class ReplyRequest(BaseModel):
 
 
 class ReplyOutcome(BaseModel):
-    action: str  # intentional | accidental | discuss | unknown | no_target | needs_reason
+    action: str  # intentional | accidental | discuss | ask | onboard | unknown | no_target | needs_reason
     targets: list[str] = []
     created: list[str] = []
     comment: str | None = None
@@ -80,10 +82,19 @@ async def write_override(settings, db, old, reason: str) -> dict:
 
 async def handle_reply(settings, db, driver, embedder, gh, req: ReplyRequest) -> ReplyOutcome:
     command, named, reason = parse(req.text)
-    if command is None:
+    if command == "ask":
+        question = COMMAND.match(req.text.strip()).group(2).strip(" :—-")
+        if not question:
+            out = ReplyOutcome(action="ask", comment="**KEEP:** Ask me something: `keep: ask why no exponential backoff?`\n\n— KEEP")
+        else:
+            text, cited = await answer(settings, db, driver, embedder, question)
+            out = ReplyOutcome(action="ask", targets=[d.id for d in cited], comment=ask_comment(question, text, cited))
+    elif command == "onboard":
+        out = ReplyOutcome(action="onboard", comment=await brief(db))
+    elif command is None:
         out = ReplyOutcome(action="unknown", comment=(
-            "**KEEP:** I didn't catch that. Use `keep: intentional — <reason>`, `keep: accidental` "
-            "or `keep: discuss`.\n\n— KEEP"))
+            "**KEEP:** I didn't catch that. Use `keep: intentional — <reason>`, `keep: accidental`, "
+            "`keep: discuss`, `keep: ask <question>` or `keep: onboard`.\n\n— KEEP"))
     else:
         if named:
             targets = named
@@ -133,6 +144,9 @@ async def handle_reply(settings, db, driver, embedder, gh, req: ReplyRequest) ->
             out = ReplyOutcome(action="intentional", targets=[d.id for d in decisions],
                                created=[n for n, _, _ in created], comment="\n".join(lines))
 
+    if req.post and out.action in ("accidental", "intentional"):
+        await db.pr_reviews.update_one({"_id": f"{req.repo}#{req.number}"},
+                                       {"$set": {"resolved": True}}, upsert=True)
     if req.post and out.comment:
         await gh.comment(req.repo, req.number, out.comment)
     return out

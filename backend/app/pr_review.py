@@ -7,6 +7,7 @@ One Claude call per review; structured JSON back.
 
 import hashlib
 import re
+from datetime import datetime, timezone
 
 from pydantic import BaseModel
 
@@ -387,6 +388,8 @@ async def review_pr(settings, db, driver, embedder, gh, repo: str, number: int,
         merged = {**prev, **{f.path: f.patch_hash for f in todo}}
         await db.pr_reviews.update_one(
             {"_id": key}, {"$set": {"files": [{"path": p, "hash": h} for p, h in merged.items()],
-                                    "last_conflicts": [c.decision_id for c in outcome.conflicts]}},
+                                    "last_conflicts": [c.decision_id for c in outcome.conflicts],
+                                    "reviewed_at": datetime.now(timezone.utc),
+                                    "resolved": not outcome.conflicts, "followed_up": False}},
             upsert=True)
     return outcome

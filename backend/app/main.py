@@ -16,6 +16,8 @@ from app.pr_review import ReviewOutcome, review_pr
 from app.patterns import Pattern, PatternIn, save_pattern
 from app.pre_mortem import PreMortemOutcome, PreMortemRequest, pre_mortem
 from app.commit_keeper import CommitRequest, LedgerEntry, keep_commit
+from app.onboarding import brief
+from app.follow_up import FollowUpOutcome, FollowUpRequest, follow_up
 from app.decision_extractor import ExtractOutcome, ExtractRequest, extract
 from app.reply_handler import ReplyOutcome, ReplyRequest, handle_reply
 from app.ids import Kind, parse_id
@@ -279,3 +281,13 @@ async def ledger(request: Request, limit: int = 20) -> list[dict]:
         out.append(doc)
     out.sort(key=lambda d: d["date"], reverse=True)
     return out[:limit]
+
+
+@app.get("/onboarding")
+async def onboarding(request: Request) -> dict[str, str]:
+    return {"markdown": await brief(request.app.state.db)}
+
+
+@app.post("/agents/follow-up")
+async def follow_up_agent(body: FollowUpRequest, request: Request) -> FollowUpOutcome:
+    return await _with_github(request, lambda gh: follow_up(request.app.state.db, gh, body.hours, body.post))
