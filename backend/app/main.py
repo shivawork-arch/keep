@@ -13,6 +13,7 @@ from app.embeddings import Embedder
 from app.github_api import GitHub, GitHubError
 from app.github_webhook import forward_to_n8n, is_valid_signature
 from app.pr_review import ReviewOutcome, review_pr
+from app.patterns import Pattern, PatternIn, save_pattern
 from app.decision_extractor import ExtractOutcome, ExtractRequest, extract
 from app.reply_handler import ReplyOutcome, ReplyRequest, handle_reply
 from app.ids import Kind, parse_id
@@ -236,3 +237,18 @@ async def decision_extractor(body: ExtractRequest, request: Request) -> ExtractO
 async def reply_handler(body: ReplyRequest, request: Request) -> ReplyOutcome:
     s = request.app.state
     return await _with_github(request, lambda gh: handle_reply(s.settings, s.db, s.neo4j, s.embedder, gh, body))
+
+
+@app.post("/patterns", status_code=201)
+async def create_pattern(data: PatternIn, request: Request) -> Pattern:
+    return await save_pattern(request.app.state.db, request.app.state.neo4j, data)
+
+
+@app.get("/patterns")
+async def list_patterns(request: Request) -> list[Pattern]:
+    out = []
+    async for doc in request.app.state.db.patterns.find({}):
+        doc = dict(doc)
+        doc["id"] = doc.pop("_id")
+        out.append(Pattern(**doc))
+    return out

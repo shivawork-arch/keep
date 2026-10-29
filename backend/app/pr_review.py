@@ -12,6 +12,8 @@ from pydantic import BaseModel
 
 from app.claude import ask_claude
 from app.models import Decision
+from app.patterns import Pattern, language_of, patterns_for
+from app.review_layers import dependency_changes, linked_issues, security_hits
 from app.search import SearchRequest, search_decisions
 from app.store import from_mongo
 
@@ -45,6 +47,10 @@ class ReviewOutcome(BaseModel):
     files_reviewed: list[str] = []
     candidates: list[str] = []
     conflicts: list[Conflict] = []
+    promises: list[dict] = []
+    security: list[dict] = []
+    drift: list[dict] = []
+    pattern_violations: list[dict] = []
     comment: str | None = None
     comment_url: str | None = None
 
@@ -67,9 +73,34 @@ REVIEW_SCHEMA = {
                 "required": ["decision_id", "file", "explanation", "severity"],
             },
         },
+        "promises": {
+            "type": "array",
+            "items": {"type": "object", "properties": {
+                "promise": {"type": "string"}, "status": {"type": "string", "enum": ["kept", "missing"]},
+                "note": {"type": "string"}}, "required": ["promise", "status"]},
+        },
+        "security": {
+            "type": "array",
+            "items": {"type": "object", "properties": {
+                "file": {"type": "string"}, "line": {"type": "integer"}, "issue": {"type": "string"},
+                "severity": {"type": "string", "enum": ["high", "medium", "low"]}},
+                "required": ["file", "issue", "severity"]},
+        },
+        "drift": {
+            "type": "array",
+            "items": {"type": "object", "properties": {
+                "file": {"type": "string"}, "added": {"type": "string"}, "overlaps_with": {"type": "string"},
+                "note": {"type": "string"}}, "required": ["file", "added", "note"]},
+        },
+        "pattern_violations": {
+            "type": "array",
+            "items": {"type": "object", "properties": {
+                "pattern_id": {"type": "string"}, "file": {"type": "string"}, "line": {"type": "integer"},
+                "evidence": {"type": "string"}}, "required": ["pattern_id", "file"]},
+        },
         "summary": {"type": "string"},
     },
-    "required": ["conflicts", "summary"],
+    "required": ["conflicts", "promises", "security", "drift", "pattern_violations", "summary"],
 }
 
 SYSTEM = """You review pull requests against a team's recorded engineering decisions.
@@ -84,7 +115,16 @@ Rules:
 - "line" is the new-file line number shown in the diff. "evidence" is that code line, copied exactly.
 - "explanation": 1-3 sentences on what the code does and why it breaks that decision. No generic advice.
 - "summary": one dry sentence for the whole PR.
-- If nothing conflicts, return an empty conflicts list."""
+- If nothing conflicts, return an empty conflicts list.
+
+Other checks (each gets an empty list when its section is missing or nothing applies):
+- promises: from "Linked issue", list what the developer said they would do; mark each kept or missing
+  against the added lines. Skip vague chatter.
+- security: only from "Security triggers"; keep the real problems, drop false alarms (test fixtures,
+  placeholder values, safe usage). One short sentence each.
+- drift: only from "Dependency changes"; flag a newly added library that does a job an existing listed
+  library already does. Name the overlap. Ignore version bumps.
+- pattern_violations: only for rules in "Pattern rules"; cite the rule ID and the offending line."""
 
 
 # ---------- diff handling (pure, tested) ----------
@@ -159,6 +199,21 @@ def validate_conflicts(raw: list[dict], decision_ids: set[str], paths: set[str])
     return sorted(out, key=lambda c: order[c.severity])
 
 
+def validate_layers(data: dict, paths: set[str], pattern_ids: set[str], has_issue: bool,
+                    has_triggers: bool, has_deps: bool) -> dict:
+    """Keep only what each layer was allowed to report, citing only files/rules we sent."""
+    sev = {"high", "medium", "low"}
+    return {
+        "promises": [p for p in data.get("promises", []) if has_issue and p.get("status") in ("kept", "missing")
+                     and p.get("promise")],
+        "security": [x for x in data.get("security", []) if has_triggers and x.get("file") in paths
+                     and x.get("severity") in sev and x.get("issue")],
+        "drift": [x for x in data.get("drift", []) if has_deps and x.get("file") in paths and x.get("note")],
+        "pattern_violations": [x for x in data.get("pattern_violations", [])
+                               if x.get("pattern_id") in pattern_ids and x.get("file") in paths],
+    }
+
+
 # ---------- comment (code writes it, not Claude) ----------
 
 REPLY_HELP = (
@@ -170,12 +225,25 @@ REPLY_HELP = (
 
 
 def build_comment(conflicts: list[Conflict], decisions: dict[str, Decision], summary: str,
-                  files_reviewed: int, checked: int) -> str:
-    if not conflicts:
+                  files_reviewed: int, checked: int, layers: dict | None = None,
+                  patterns: dict[str, Pattern] | None = None, issue: int | None = None) -> str:
+    layers = layers or {}
+    promises, security = layers.get("promises", []), layers.get("security", [])
+    drift, violations = layers.get("drift", []), layers.get("pattern_violations", [])
+    missing = [p for p in promises if p["status"] == "missing"]
+    findings = len(conflicts) + len(missing) + len(security) + len(drift) + len(violations)
+
+    if findings == 0:
+        extra = f" All {len(promises)} promise(s) from issue {issue} kept." if promises else ""
         return (f"**KEEP:** No conflicts with past decisions. Checked {files_reviewed} file(s) "
-                f"against {checked} related decision(s).\n\n— KEEP")
-    n = len(conflicts)
-    lines = [f"## KEEP: {n} conflict{'s' if n > 1 else ''} with past decisions", "", summary, ""]
+                f"against {checked} related decision(s).{extra}\n\n— KEEP")
+
+    lines = []
+    if conflicts:
+        n = len(conflicts)
+        lines += [f"## KEEP: {n} conflict{'s' if n > 1 else ''} with past decisions", "", summary, ""]
+    else:
+        lines += ["## KEEP review", "", summary, ""]
     for c in conflicts:
         d = decisions[c.decision_id]
         where = f"`{c.file}`" + (f" line {c.line}" if c.line else "")
@@ -188,7 +256,35 @@ def build_comment(conflicts: list[Conflict], decisions: dict[str, Decision], sum
                   f"**Why:** {d.reason}  ",
                   f"**Decided by:** {', '.join('@' + p for p in d.decided_by)} in [{SOURCE_LABEL[d.source.type.value]} {d.source.ref}]({d.source.url})",
                   ""]
-    lines += [REPLY_HELP, "", "— KEEP"]
+    if promises:
+        lines += [f"### Promises from issue {issue}", "", "| Promise | Status |", "|---|---|"]
+        lines += [f"| {p['promise']} | {'kept' if p['status'] == 'kept' else '**missing**'}"
+                  f"{' — ' + p['note'] if p.get('note') else ''} |" for p in promises]
+        lines.append("")
+    if security:
+        lines += ["### Security", ""]
+        lines += [f"- **{x['severity']}** `{x['file']}`{' line ' + str(x['line']) if x.get('line') else ''}: {x['issue']}"
+                  for x in security]
+        lines.append("")
+    if violations:
+        patterns = patterns or {}
+        lines += ["### Pattern rules", ""]
+        for v in violations:
+            p = patterns.get(v["pattern_id"])
+            rule = f" · {p.rule}" if p else ""
+            lines.append(f"- **{v['pattern_id']}**{rule}: `{v['file']}`"
+                         f"{' line ' + str(v['line']) if v.get('line') else ''}"
+                         f"{': `' + v['evidence'].strip() + '`' if v.get('evidence') else ''}")
+        lines.append("")
+    if drift:
+        lines += ["### Tech drift", ""]
+        lines += [f"- `{x['file']}` adds **{x['added']}**"
+                  f"{' (overlaps with ' + x['overlaps_with'] + ')' if x.get('overlaps_with') else ''}: {x['note']}"
+                  for x in drift]
+        lines.append("")
+    if conflicts:
+        lines += [REPLY_HELP, ""]
+    lines.append("— KEEP")
     return "\n".join(lines)
 
 
@@ -233,20 +329,56 @@ async def review_pr(settings, db, driver, embedder, gh, repo: str, number: int,
                                     "\n".join(t for f in todo for _, t in f.added)]))
     decisions = await related_decisions(db, driver, embedder, settings, query, paths)
 
-    if not decisions:
-        # No related memory: skip the Claude call entirely (cost rule).
+    # Layer inputs found by code.
+    issue_numbers = linked_issues(pr.get("body") or "")
+    issue_text, issue_no = "", None
+    if issue_numbers:
+        issue_no = issue_numbers[0]
+        try:
+            iss = await gh.issue(repo, issue_no)
+            thread = await gh.issue_comments(repo, issue_no)
+            issue_text = f"Issue {issue_no}: {iss.get('title')}\n{iss.get('body') or ''}\n" + "\n".join(
+                f"@{(c.get('user') or {}).get('login')}: {c.get('body', '')}" for c in thread
+                if (c.get("user") or {}).get("type") != "Bot")
+        except Exception:
+            issue_no = None
+    triggers = security_hits(todo)
+    deps = dependency_changes(todo)
+    patterns = await patterns_for(db, {lang for f in todo if (lang := language_of(f.path))})
+
+    if not (decisions or triggers or deps or patterns or issue_text):
+        # Nothing for any layer to check: skip the Claude call entirely (cost rule).
         outcome = ReviewOutcome(status="skipped_no_memory", files_reviewed=paths, comment=NO_MEMORY_COMMENT)
     else:
-        prompt = (f"PR #{number}: {pr.get('title')}\n{pr.get('body') or ''}\n\n"
-                  f"## Decisions on record\n{decisions_text(decisions)}\n\n"
-                  f"## Added lines (new-file line numbers)\n{diff_text(todo)}")
-        result = await ask_claude(settings, db, "pr_review", SYSTEM, prompt, schema=REVIEW_SCHEMA, urgent=True)
+        sections = [f"PR {number}: {pr.get('title')}\n{pr.get('body') or ''}"]
+        if decisions:
+            sections.append(f"## Decisions on record\n{decisions_text(decisions)}")
+        if issue_text:
+            sections.append(f"## Linked issue\n{issue_text[:6000]}")
+        if triggers:
+            sections.append("## Security triggers\n" + "\n".join(
+                f"{t['file']}:{t['line']} [{t['trigger']}] {t['code']}" for t in triggers[:40]))
+        if deps:
+            sections.append("## Dependency changes\n" + "\n".join(
+                f"{d['file']}: " + "; ".join(d["added"]) for d in deps))
+        if patterns:
+            sections.append("## Pattern rules\n" + "\n".join(
+                f"[{p.id}] ({p.language}) {p.rule}. Anti-pattern: {p.anti_pattern}" for p in patterns))
+        sections.append(f"## Added lines (new-file line numbers)\n{diff_text(todo)}")
+
+        result = await ask_claude(settings, db, "pr_review", SYSTEM, "\n\n".join(sections),
+                                  schema=REVIEW_SCHEMA, urgent=True)
         by_id = {d.id: d for d in decisions}
+        by_pattern = {p.id: p for p in patterns}
         conflicts = validate_conflicts(result.data.get("conflicts", []), set(by_id), set(paths))
+        layers = validate_layers(result.data, set(paths), set(by_pattern), bool(issue_text), bool(triggers), bool(deps))
+        missing = [p for p in layers["promises"] if p["status"] == "missing"]
+        found = conflicts or missing or layers["security"] or layers["drift"] or layers["pattern_violations"]
         outcome = ReviewOutcome(
-            status="conflicts" if conflicts else "clean",
-            files_reviewed=paths, candidates=list(by_id), conflicts=conflicts,
-            comment=build_comment(conflicts, by_id, result.data.get("summary", ""), len(paths), len(by_id)),
+            status="conflicts" if conflicts else ("findings" if found else "clean"),
+            files_reviewed=paths, candidates=list(by_id), conflicts=conflicts, **layers,
+            comment=build_comment(conflicts, by_id, result.data.get("summary", ""), len(paths), len(by_id),
+                                  layers, by_pattern, issue_no),
         )
 
     if post:
