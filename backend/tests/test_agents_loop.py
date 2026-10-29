@@ -213,3 +213,10 @@ def test_unknown_command_gets_help():
     gh = FakeGH()
     out = run(handle_reply(S, FakeDB(), FakeDriver(), FakeEmbedder(), gh, req("keep: whatever")))
     assert out.action == "unknown" and "keep: intentional" in gh.posted[0]
+
+
+def test_dry_run_saves_nothing(monkeypatch):
+    fake_claude(monkeypatch, decision_extractor, EXTRACTED)
+    db, gh = FakeDB(), FakeGH()
+    out = run(extract(S, db, FakeDriver(), FakeEmbedder(), gh, "o/r", 9, post=False))
+    assert out.status == "recorded" and db.decisions.docs == {} and gh.posted == []

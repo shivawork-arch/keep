@@ -102,11 +102,13 @@ async def handle_reply(settings, db, driver, embedder, gh, req: ReplyRequest) ->
                 f"**KEEP:** Noted, @{req.author}. {ids} stands. I'll check the next push.\n\n— KEEP"))
         elif command == "discuss":
             people = sorted({p for d in decisions for p in d.decided_by} - {req.author})
-            pings = " ".join(f"@{p}" for p in people) or "(only you decided this one)"
             ids = ", ".join(f"**{d.id}** · {d.title}" for d in decisions)
+            if people:
+                opener = f"{' '.join('@' + p for p in people)}, @{req.author} wants to revisit {ids}."
+            else:
+                opener = f"@{req.author}, you're the only one on record for {ids}, so there's nobody else to ping."
             out = ReplyOutcome(action="discuss", targets=[d.id for d in decisions], comment=(
-                f"**KEEP:** {pings}, @{req.author} wants to revisit {ids}.\n\n"
-                f"Original reason: {decisions[0].reason}\n\n— KEEP"))
+                f"**KEEP:** {opener}\n\nOriginal reason: {decisions[0].reason}\n\n— KEEP"))
         elif not reason:
             out = ReplyOutcome(action="needs_reason", targets=[d.id for d in decisions], comment=(
                 "**KEEP:** An override needs a reason: `keep: intentional — <why>`. "

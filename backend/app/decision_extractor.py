@@ -46,6 +46,8 @@ a rule future code must follow, a constraint someone explained.
 
 Skip: "LGTM", thanks, unanswered questions, bot messages, style nitpicks, routine changes with no
 stated reason. If the PR has no real decision, return an empty list. Most PRs have zero or one.
+A choice and the rule that follows from it are ONE decision: put the rule in future_implication,
+do not record it separately.
 
 For each decision:
 - title: under 8 words.
@@ -140,6 +142,9 @@ async def extract(settings, db, driver, embedder, gh, repo: str, number: int, po
             text=f"{d.title}\n{d.decision}\n{d.future_implication}", k=1, min_score=settings.duplicate_score))
         if hits:
             dupes.append(hits[0].decision.id)
+            continue
+        if not post:
+            recorded.append(("(dry run)", d.title))  # dry run: show what would be saved, save nothing
             continue
         saved = await save_decision(db, driver, embedder, d)
         recorded.append((saved.id, saved.title))
