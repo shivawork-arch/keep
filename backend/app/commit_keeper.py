@@ -72,8 +72,9 @@ class LedgerEntry(BaseModel):
     needs_sync: bool = False
 
 
-SUMMARY_PROMPT = """Summarise this code push for a team's change log in 3-5 plain sentences.
-Say what changed and why it matters. No bullet points, no preamble.
+SUMMARY_PROMPT = """Summarise this code push for a team's change log.
+Describe only what the diff shows: what changed, in which files. One sentence for a tiny change,
+up to 4 for a large one. Do not guess intent or say what it "suggests". No bullet points, no preamble.
 
 Commit messages:
 {messages}
