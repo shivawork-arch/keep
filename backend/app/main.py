@@ -3,6 +3,7 @@ from contextlib import asynccontextmanager
 
 import httpx
 from fastapi import FastAPI, HTTPException, Request
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from neo4j import AsyncGraphDatabase
 from pymongo import AsyncMongoClient
@@ -17,6 +18,8 @@ from app.patterns import Pattern, PatternIn, save_pattern
 from app.pre_mortem import PreMortemOutcome, PreMortemRequest, pre_mortem
 from app.commit_keeper import CommitRequest, LedgerEntry, keep_commit
 from app.onboarding import brief
+from app.graph import graph
+from app.health_auditor import build_report
 from app.follow_up import FollowUpOutcome, FollowUpRequest, follow_up
 from app.incident_linker import IncidentOutcome, IncidentRequest, link_incident
 from app.migrate import MigrateOutcome, MigrateRequest, migrate
@@ -62,6 +65,8 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="KEEP", lifespan=lifespan)
+# The dashboard (Next.js dev server) reads from the API in the browser.
+app.add_middleware(CORSMiddleware, allow_origins=["http://localhost:3000"], allow_methods=["GET"], allow_headers=["*"])
 
 
 async def check_mongodb(client: AsyncMongoClient) -> bool:
@@ -329,3 +334,28 @@ async def health_auditor(body: HealthRequest, request: Request) -> HealthOutcome
 async def guardrail_builder(body: GuardrailRequest, request: Request) -> GuardrailOutcome:
     s = request.app.state
     return await _with_github(request, lambda gh: build_guardrails(s.settings, s.db, s.neo4j, gh, body))
+
+
+@app.get("/graph")
+async def graph_data(request: Request) -> dict:
+    return await graph(request.app.state.db)
+
+
+@app.get("/health-report")
+async def health_report(request: Request) -> dict[str, str]:
+    s = request.app.state
+    return {"markdown": await build_report(s.settings, s.db, s.neo4j)}
+
+
+@app.get("/stats")
+async def stats(request: Request) -> dict:
+    db, s = request.app.state.db, request.app.state.settings
+    decisions = [d async for d in db.decisions.find({})]
+    return {
+        "active": sum(d.get("status") == "active" for d in decisions),
+        "superseded": sum(d.get("status") != "active" for d in decisions),
+        "patterns": len([p async for p in db.patterns.find({"status": "active"})]),
+        "incidents": len([i async for i in db.incidents.find({})]),
+        "commits": len([c async for c in db.commit_ledger.find({})]),
+        "usage": await Budget(db, s.daily_call_cap, s.daily_token_cap).usage(),
+    }
