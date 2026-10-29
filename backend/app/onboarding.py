@@ -9,6 +9,13 @@ from collections import Counter, defaultdict
 from app.store import from_mongo
 
 
+def first_sentence(text: str, cap: int = 200) -> str:
+    line = text.strip().splitlines()[0] if text.strip() else ""
+    end = line.find(". ")
+    line = line[:end + 1] if end != -1 else line
+    return line if len(line) <= cap else line[:cap].rsplit(" ", 1)[0] + "..."
+
+
 async def brief(db, limit_changes: int = 10) -> str:
     decisions = []
     async for doc in db.decisions.find({}):
@@ -58,7 +65,7 @@ async def brief(db, limit_changes: int = 10) -> str:
     changes.sort(key=lambda c: c["date"], reverse=True)
     if changes:
         lines.append("### Recent changes")
-        lines += [f"- `{c['_id']}` ({c['breaking_risk']}) {c['summary'].splitlines()[0][:160]}"
+        lines += [f"- `{c['_id']}` ({c['breaking_risk']}) {first_sentence(c['summary'])}"
                   for c in changes[:limit_changes]]
         lines.append("")
 
