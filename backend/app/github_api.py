@@ -54,6 +54,19 @@ class GitHub:
     async def commit(self, repo: str, sha: str) -> dict:
         return await self._req("GET", f"/repos/{repo}/commits/{sha}")
 
+    async def merged_pulls(self, repo: str, limit: int = 30) -> list[dict]:
+        pulls = await self._req("GET", f"/repos/{repo}/pulls",
+                                params={"state": "closed", "per_page": min(limit * 2, 100),
+                                        "sort": "updated", "direction": "desc"})
+        return [p for p in pulls if p.get("merged_at")][:limit]
+
+    async def create_issue(self, repo: str, title: str, body: str, labels: list[str] | None = None) -> dict:
+        return await self._req("POST", f"/repos/{repo}/issues",
+                               json={"title": title, "body": body, "labels": labels or []})
+
+    async def update_issue(self, repo: str, number: int, body: str) -> dict:
+        return await self._req("PATCH", f"/repos/{repo}/issues/{number}", json={"body": body})
+
     async def comment(self, repo: str, number: int, body: str) -> dict:
         return await self._req("POST", f"/repos/{repo}/issues/{number}/comments", json={"body": body})
 

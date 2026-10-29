@@ -18,6 +18,11 @@ from app.pre_mortem import PreMortemOutcome, PreMortemRequest, pre_mortem
 from app.commit_keeper import CommitRequest, LedgerEntry, keep_commit
 from app.onboarding import brief
 from app.follow_up import FollowUpOutcome, FollowUpRequest, follow_up
+from app.incident_linker import IncidentOutcome, IncidentRequest, link_incident
+from app.migrate import MigrateOutcome, MigrateRequest, migrate
+from app.decision_decay import DecayOutcome, DecayRequest, decay
+from app.health_auditor import HealthOutcome, HealthRequest, audit
+from app.guardrail_builder import GuardrailOutcome, GuardrailRequest, build_guardrails
 from app.decision_extractor import ExtractOutcome, ExtractRequest, extract
 from app.reply_handler import ReplyOutcome, ReplyRequest, handle_reply
 from app.ids import Kind, parse_id
@@ -291,3 +296,36 @@ async def onboarding(request: Request) -> dict[str, str]:
 @app.post("/agents/follow-up")
 async def follow_up_agent(body: FollowUpRequest, request: Request) -> FollowUpOutcome:
     return await _with_github(request, lambda gh: follow_up(request.app.state.db, gh, body.hours, body.post))
+
+
+@app.post("/agents/incident-linker")
+async def incident_linker(body: IncidentRequest, request: Request) -> IncidentOutcome:
+    s = request.app.state
+    return await _with_github(request, lambda gh: link_incident(s.settings, s.db, s.neo4j, s.embedder, gh, body))
+
+
+@app.post("/agents/migrate")
+async def migrate_agent(body: MigrateRequest, request: Request) -> MigrateOutcome:
+    s = request.app.state
+    return await _with_github(request, lambda gh: migrate(s.settings, s.db, s.neo4j, s.embedder, gh, body))
+
+
+@app.post("/agents/decision-decay")
+async def decision_decay(body: DecayRequest, request: Request) -> DecayOutcome:
+    s = request.app.state
+    try:
+        return await decay(s.settings, s.db, body)
+    except ClaudeError as e:
+        raise HTTPException(502, str(e))
+
+
+@app.post("/agents/health-auditor")
+async def health_auditor(body: HealthRequest, request: Request) -> HealthOutcome:
+    s = request.app.state
+    return await _with_github(request, lambda gh: audit(s.settings, s.db, s.neo4j, gh, body))
+
+
+@app.post("/agents/guardrail-builder")
+async def guardrail_builder(body: GuardrailRequest, request: Request) -> GuardrailOutcome:
+    s = request.app.state
+    return await _with_github(request, lambda gh: build_guardrails(s.settings, s.db, s.neo4j, gh, body))

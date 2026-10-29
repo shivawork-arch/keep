@@ -48,8 +48,8 @@ SET p.rule = $rule, p.language = $language, p.status = $status
 """
 
 
-async def save_pattern(db, driver, data: PatternIn) -> Pattern:
-    p = Pattern(id=await next_id(db, Kind.PATTERN), **data.model_dump())
+async def save_pattern(db, driver, data: PatternIn, status: str = "active") -> Pattern:
+    p = Pattern(id=await next_id(db, Kind.PATTERN), status=status, **data.model_dump())
     doc = p.model_dump(exclude={"id"})
     doc["_id"] = p.id
     await db.patterns.insert_one(doc)
@@ -71,3 +71,16 @@ async def patterns_for(db, languages: set[str]) -> list[Pattern]:
         doc["id"] = doc.pop("_id")
         out.append(Pattern(**doc))
     return out
+
+
+async def set_pattern_status(db, driver, pattern_id: str, status: str) -> bool:
+    doc = await db.patterns.find_one({"_id": pattern_id})
+    if not doc:
+        return False
+    await db.patterns.update_one({"_id": pattern_id}, {"$set": {"status": status}})
+    try:
+        await driver.execute_query("MATCH (p:Pattern {id: $id}) SET p.status = $status", id=pattern_id, status=status)
+    except Exception as e:
+        log.warning("Graph status update failed for %s: %s", pattern_id, e)
+        await db.patterns.update_one({"_id": pattern_id}, {"$set": {"needs_sync": True}})
+    return True

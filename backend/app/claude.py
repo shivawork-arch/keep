@@ -35,6 +35,9 @@ JOB_MODELS: dict[str, Tier] = {
     "reply_parse": Tier.HAIKU,
     "override_write": Tier.HAIKU,
     "ask": Tier.HAIKU,
+    "incident_link": Tier.HAIKU,
+    "decay_check": Tier.HAIKU,
+    "guardrail": Tier.HAIKU,
     "sort": Tier.HAIKU,
     "ping": Tier.HAIKU,
 }

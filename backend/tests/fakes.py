@@ -27,8 +27,13 @@ class FakeCollection:
             doc.setdefault(field, []).append(value)
 
     async def find_one(self, filter):
-        doc = self.docs.get(filter["_id"])
-        return dict(doc) if doc else None
+        if "_id" in filter:
+            doc = self.docs.get(filter["_id"])
+            return dict(doc) if doc else None
+        for doc in self.docs.values():
+            if all(doc.get(k) == v for k, v in filter.items()):
+                return dict(doc)
+        return None
 
     def find(self, filter, projection=None):
         def matches(doc):
@@ -67,6 +72,8 @@ class FakeDB:
         self.pr_extractions = FakeCollection()
         self.patterns = FakeCollection()
         self.commit_ledger = FakeCollection()
+        self.incidents = FakeCollection()
+        self.keep_state = FakeCollection()
 
 
 class FakeResult:

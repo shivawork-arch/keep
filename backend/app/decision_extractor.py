@@ -113,7 +113,8 @@ def clean(raw: dict, changed: set[str], people: set[str], author: str, has_discu
         return None
 
 
-async def extract(settings, db, driver, embedder, gh, repo: str, number: int, post: bool = True) -> ExtractOutcome:
+async def extract(settings, db, driver, embedder, gh, repo: str, number: int, post: bool = True,
+                  comment_on_pr: bool = True) -> ExtractOutcome:
     key = f"{repo}#{number}"
     if await db.pr_extractions.find_one({"_id": key}):
         return ExtractOutcome(status="skipped_already_done")
@@ -158,6 +159,6 @@ async def extract(settings, db, driver, embedder, gh, repo: str, number: int, po
     lines += [f"- **{i}** · {t}" for i, t in recorded]
     lines += ["", "Future PRs that go against these get flagged.", "", "— KEEP"]
     comment = "\n".join(lines)
-    if post:
+    if post and comment_on_pr:
         await gh.comment(repo, number, comment)
     return ExtractOutcome(status="recorded", recorded=[i for i, _ in recorded], skipped_duplicates=dupes, comment=comment)

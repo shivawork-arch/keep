@@ -15,10 +15,11 @@ from pydantic import BaseModel
 from app.ask import answer, ask_comment
 from app.claude import ClaudeError, ask_claude
 from app.onboarding import brief
+from app.patterns import set_pattern_status
 from app.models import Confidence, DecisionIn, Origin
 from app.store import get_decision, save_decision, supersede
 
-COMMAND = re.compile(r"^\s*keep:\s*(intentional|accidental|discuss|ask|onboard)\b(.*)$", re.IGNORECASE | re.DOTALL)
+COMMAND = re.compile(r"^\s*keep:\s*(intentional|accidental|discuss|ask|onboard|approve)\b(.*)$", re.IGNORECASE | re.DOTALL)
 IDS = re.compile(r"KEEP-D-\d{3,}")
 REASON_SPLIT = re.compile(r"^[\s\-–—:]+")
 
@@ -89,6 +90,13 @@ async def handle_reply(settings, db, driver, embedder, gh, req: ReplyRequest) ->
         else:
             text, cited = await answer(settings, db, driver, embedder, question)
             out = ReplyOutcome(action="ask", targets=[d.id for d in cited], comment=ask_comment(question, text, cited))
+    elif command == "approve":
+        pids = re.findall(r"KEEP-P-\d{3,}", req.text)
+        done = [p for p in pids if await set_pattern_status(db, driver, p, "active")]
+        out = ReplyOutcome(action="approve", targets=done, comment=(
+            f"**KEEP:** {', '.join('**' + p + '**' for p in done)} now active. PR Review checks "
+            f"{'it' if len(done) == 1 else 'them'} from the next PR.\n\n— KEEP" if done else
+            "**KEEP:** Name the rule to approve, e.g. `keep: approve KEEP-P-002`.\n\n— KEEP"))
     elif command == "onboard":
         out = ReplyOutcome(action="onboard", comment=await brief(db))
     elif command is None:
