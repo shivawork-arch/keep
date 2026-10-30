@@ -10,8 +10,8 @@
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2.2,
       "position": [
-        0,
-        -64
+        -32,
+        48
       ],
       "id": "dd19d870-3888-40ea-bb05-4103f8142b63",
       "name": "Webhook",
@@ -55,7 +55,7 @@
       "typeVersion": 2.4,
       "position": [
         224,
-        64
+        144
       ],
       "id": "28777b5d-ad83-4f96-9734-3e3225b48832",
       "name": "Filter"
@@ -186,6 +186,31 @@
               },
               "renameOutput": true,
               "outputKey": "Commit Keeper"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 4
+                },
+                "conditions": [
+                  {
+                    "id": "d45791c6-0204-4104-8c02-9a9e496ea2b6",
+                    "leftValue": "={{ $json.key }}",
+                    "rightValue": "issues.labeled",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Incident Linker"
             }
           ]
         },
@@ -221,8 +246,8 @@
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.5,
       "position": [
-        464,
-        -48
+        432,
+        -16
       ],
       "id": "d88cd662-f4d6-4cb0-95d8-3f2bd1c9f974",
       "name": "Edit Fields"
@@ -431,6 +456,247 @@
       ],
       "id": "8c57ba0b-91e7-4804-8b0e-fbd26478961c",
       "name": "Commit Keeper"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://host.docker.internal:8000/agents/pr-review",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "repo",
+              "value": "={{ $json.repo }}"
+            },
+            {
+              "name": "number",
+              "value": "={{ $json.number }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 120000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        1216,
+        -256
+      ],
+      "id": "3e7a0cc6-94dd-4ce2-a76c-a97cc0fe6bfc",
+      "name": "Call PR Review"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://host.docker.internal:8000/agents/decision-extractor",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "repo",
+              "value": "={{ $json.repo }}"
+            },
+            {
+              "name": "number",
+              "value": "={{ $json.number }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 120000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        1216,
+        -96
+      ],
+      "id": "6ee18b51-51d2-4824-aefe-27eb09e798ce",
+      "name": "Call Decision Extractor"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://host.docker.internal:8000/agents/reply-handler",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "repo",
+              "value": "={{ $json.repo }}"
+            },
+            {
+              "name": "number",
+              "value": "={{ $json.number }}"
+            },
+            {
+              "name": "comment_id",
+              "value": "={{ $('Edit Fields').item.json.body.comment.id }}"
+            },
+            {
+              "name": "author",
+              "value": "={{ $('Edit Fields').item.json.body.comment.user.login }}"
+            },
+            {
+              "name": "text",
+              "value": "={{ $('Edit Fields').item.json.body.comment.body }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 120000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        1216,
+        224
+      ],
+      "id": "eebae1fb-39a2-40d9-8ae9-1defc3f15b7c",
+      "name": "Call Reply Handler"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://host.docker.internal:8000/agents/pre-mortem",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "repo",
+              "value": "={{ $json.repo }}"
+            },
+            {
+              "name": "number",
+              "value": "={{ $json.number }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 120000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        1216,
+        64
+      ],
+      "id": "38a606f1-77bc-474f-8a2c-21acadca452e",
+      "name": "Call Pre-Mortem"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://host.docker.internal:8000/agents/commit-keeper",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "repo",
+              "value": "={{ $json.repo }}"
+            },
+            {
+              "name": "ref",
+              "value": "={{ $('Edit Fields').item.json.body.ref }}"
+            },
+            {
+              "name": "before",
+              "value": "={{ $('Edit Fields').item.json.body.before }}"
+            },
+            {
+              "name": "after",
+              "value": "={{ $('Edit Fields').item.json.body.after }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 120000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        1216,
+        384
+      ],
+      "id": "676681f0-f71e-4cbe-9625-a5da5b41bb5d",
+      "name": "Call Commit Keeper"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "7a92784d-ea1c-4b27-b73c-38dec2063321",
+              "name": "route",
+              "value": "Incident Linker",
+              "type": "string"
+            },
+            {
+              "id": "013bd2d3-90aa-442c-8a26-bf89791f5a4f",
+              "name": "repo",
+              "value": "={{ $json.body.repository?.full_name }}",
+              "type": "string"
+            },
+            {
+              "id": "d45d4b8c-df83-4c78-aeb0-48f4c70a7e8a",
+              "name": "number",
+              "value": "={{ $json.body.pull_request?.number ?? $json.body.issue?.number ?? \"\" }}",
+              "type": "string"
+            },
+            {
+              "id": "a6faf4ac-bc14-4445-b078-593cde1d2a83",
+              "name": "key",
+              "value": "={{ $json.key }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        992,
+        560
+      ],
+      "id": "e0f29f87-fb91-4048-97d9-b13fd8b8fba5",
+      "name": "Incident Linker"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://host.docker.internal:8000/agents/incident-linker",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "repo",
+              "value": "={{ $json.repo }}"
+            },
+            {
+              "name": "number",
+              "value": "={{ $json.number }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 120000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        1216,
+        560
+      ],
+      "id": "2725c9d1-e440-4f9b-b36a-697aebbdd3eb",
+      "name": "Call Incident Linker"
     }
   ],
   "pinData": {},
@@ -504,6 +770,79 @@
             "type": "main",
             "index": 0
           }
+        ],
+        [
+          {
+            "node": "Incident Linker",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "PR Review": {
+      "main": [
+        [
+          {
+            "node": "Call PR Review",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Decision Extractor": {
+      "main": [
+        [
+          {
+            "node": "Call Decision Extractor",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Reply Handler": {
+      "main": [
+        [
+          {
+            "node": "Call Reply Handler",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pre-Mortem": {
+      "main": [
+        [
+          {
+            "node": "Call Pre-Mortem",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Commit Keeper": {
+      "main": [
+        [
+          {
+            "node": "Call Commit Keeper",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Incident Linker": {
+      "main": [
+        [
+          {
+            "node": "Call Incident Linker",
+            "type": "main",
+            "index": 0
+          }
         ]
       ]
     }
@@ -513,7 +852,7 @@
     "executionOrder": "v1",
     "binaryMode": "separate"
   },
-  "versionId": "69566532-2fe1-4078-9f5d-b4cd8edb1a3e",
+  "versionId": "0d9bc14d-25c2-40a5-8ce2-b4a15a2218a0",
   "meta": {
     "instanceId": "c198690174800170e1071c78c71278fad4d1a348a683f7726bb194a7bdf5b4b6"
   },

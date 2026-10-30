@@ -1,0 +1,196 @@
+{
+  "name": "KEEP Scheduled",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "triggerAtHour": 9
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.4,
+      "position": [
+        0,
+        48
+      ],
+      "id": "6f94bc8a-7035-4fbc-978e-3c61675b7e45",
+      "name": "Schedule Trigger"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://host.docker.internal:8000/agents/follow-up",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "hours",
+              "value": "48"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 120000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        400,
+        -48
+      ],
+      "id": "fb035a91-f339-4472-9cfb-f8b944f032d8",
+      "name": "Call Follow-Up"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://host.docker.internal:8000/agents/health-auditor",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "repo",
+              "value": "shivawork-arch/keep-sandbox"
+            },
+            {
+              "name": "post",
+              "value": "true"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 300000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        400,
+        -224
+      ],
+      "id": "98caed86-f975-463c-89a7-840a8f72deae",
+      "name": "Call Health Auditor"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://host.docker.internal:8000/agents/decision-decay",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "limit",
+              "value": "10"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 300000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        400,
+        320
+      ],
+      "id": "3fcdc6cf-7b00-4760-83cb-836f8980ad29",
+      "name": "Call Decision Decay"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://host.docker.internal:8000/agents/guardrail-builder",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "repo",
+              "value": "shivawork-arch/keep-sandbox"
+            },
+            {
+              "name": "prs",
+              "value": "20"
+            },
+            {
+              "name": "post",
+              "value": "true"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 300000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        400,
+        144
+      ],
+      "id": "b83c20eb-71c4-4add-b55b-723a0494704a",
+      "name": "Call Guardrail Builder"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Call Follow-Up",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Call Health Auditor",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Call Decision Decay",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Call Guardrail Builder",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call Follow-Up": {
+      "main": [
+        []
+      ]
+    },
+    "Call Health Auditor": {
+      "main": [
+        []
+      ]
+    },
+    "Call Decision Decay": {
+      "main": [
+        []
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "b228ae9f-9d0a-41fc-b5cc-5fd927729674",
+  "meta": {
+    "instanceId": "c198690174800170e1071c78c71278fad4d1a348a683f7726bb194a7bdf5b4b6"
+  },
+  "nodeGroups": [],
+  "id": "tLhLtSd9CSXZbrtZ",
+  "tags": []
+}
