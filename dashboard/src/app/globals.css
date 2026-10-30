@@ -7,32 +7,24 @@
   --revision: #ff4f6d;
   --amber: #f2c14e;
   --dim: #7f9fc4;
+  --bg: #1b1c1f; /* dark gray around the blueprint panels */
   --sans: var(--font-archivo), system-ui, sans-serif;
   --mono: var(--font-plex-mono), ui-monospace, monospace;
 }
 * { box-sizing: border-box; }
-html, body { margin: 0; background: var(--paper); color: var(--chalk); font-family: var(--sans);
+html, body { margin: 0; background: var(--bg); color: var(--chalk); font-family: var(--sans);
   font-size: 16px; line-height: 1.5; }
 a { color: var(--chalk); text-decoration-color: var(--dim); text-underline-offset: 3px; word-break: break-all; }
 button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; }
 :focus-visible { outline: 2px solid var(--amber); outline-offset: 2px; }
 .mono { font-family: var(--mono); font-size: 0.86em; }
 
-/* Drafting grid on the whole sheet */
-.sheet {
-  min-height: 100vh;
-  background-image:
-    linear-gradient(rgba(169, 199, 232, 0.07) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(169, 199, 232, 0.07) 1px, transparent 1px),
-    linear-gradient(rgba(169, 199, 232, 0.14) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(169, 199, 232, 0.14) 1px, transparent 1px);
-  background-size: 24px 24px, 24px 24px, 120px 120px, 120px 120px;
-  padding: 20px 28px 32px;
-}
+/* Dark gray page; the blueprint grid lives only inside the map panel */
+.sheet { min-height: 100vh; background: var(--bg); padding: 20px 28px 32px; }
 
 /* Header: title in condensed type, sheet index beside it */
 .head { display: flex; align-items: baseline; gap: 36px; flex-wrap: wrap;
-  border-bottom: 1px solid rgba(169, 199, 232, 0.35); padding-bottom: 14px; }
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12); padding-bottom: 14px; }
 .title { font-stretch: 62%; font-weight: 800; font-size: 3.4rem; line-height: 0.9; margin: 0; letter-spacing: 0.01em; }
 .title small { display: block; font-stretch: 100%; font-weight: 400; font-size: 0.95rem; color: var(--dim);
   margin-top: 6px; letter-spacing: 0; }
@@ -47,10 +39,16 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 
 /* Map: the graph is the sheet */
 .map { position: relative; height: calc(100vh - 120px); min-height: 520px; margin-top: 8px; }
-.graph { position: absolute; inset: 0; }
+.graph { position: absolute; inset: 0 420px 0 0; background-color: var(--paper); border: 1.5px solid var(--line);
+  background-image:
+    linear-gradient(rgba(169, 199, 232, 0.07) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(169, 199, 232, 0.07) 1px, transparent 1px),
+    linear-gradient(rgba(169, 199, 232, 0.14) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(169, 199, 232, 0.14) 1px, transparent 1px);
+  background-size: 24px 24px, 24px 24px, 120px 120px, 120px 120px; }
 
 /* Title block, bottom-right corner, like a real blueprint */
-.titleblock { position: absolute; right: 0; bottom: 0; width: 340px; background: var(--paper-deep);
+.titleblock { position: absolute; right: 0; top: 0; width: 400px; background: var(--paper-deep);
   border: 1.5px solid var(--line); font-size: 0.9rem; z-index: 2; }
 .titleblock .row { display: grid; grid-template-columns: 1fr auto; border-top: 1px solid rgba(169, 199, 232, 0.4);
   padding: 5px 12px; }
@@ -85,17 +83,17 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 .callout dt { color: var(--dim); font-size: 0.82rem; margin-top: 12px; }
 .callout dd { margin: 2px 0 0; }
 .callout ol { padding-left: 18px; margin: 6px 0 0; color: var(--dim); font-size: 0.88rem; }
-.hint { position: absolute; top: 14px; left: 0; color: var(--dim); font-size: 0.9rem; z-index: 2; }
+.hint { position: absolute; top: 14px; left: 18px; color: var(--dim); font-size: 0.9rem; z-index: 2; }
 
 /* Other sheets: drafted tables and documents */
-.page { max-width: 1200px; margin-top: 24px; }
+.page { max-width: 1640px; margin: 24px auto 0; font-size: 1.1rem; }
 table { width: 100%; border-collapse: collapse; background: var(--paper-deep); border: 1.5px solid var(--line); }
 th, td { text-align: left; padding: 10px 14px; border-bottom: 1px solid rgba(169, 199, 232, 0.3); vertical-align: top; }
 th { color: var(--dim); font-weight: 500; font-size: 0.88rem; }
 tr.old td { color: var(--dim); }
 tr.old td:first-child { text-decoration: line-through; text-decoration-color: var(--revision); }
 .risk-HIGH { color: var(--revision); } .risk-MEDIUM { color: var(--amber); }
-.doc { max-width: 78ch; background: var(--paper-deep); border: 1.5px solid var(--line); padding: 8px 32px 24px; }
+.doc { max-width: 1100px; background: var(--paper-deep); border: 1.5px solid var(--line); padding: 8px 32px 24px; }
 .doc h2 { font-stretch: 75%; font-size: 1.9rem; }
 .doc h3 { font-stretch: 85%; margin-top: 1.6em; }
 .doc table { font-size: 0.9rem; }
@@ -104,7 +102,7 @@ tr.old td:first-child { text-decoration: line-through; text-decoration-color: va
 @media (max-width: 860px) {
   .sheet { padding: 16px; }
   .map { height: auto; min-height: 0; }
-  .graph { position: relative; height: 62vh; }
+  .graph { position: relative; inset: auto; height: 62vh; }
   .titleblock, .callout { position: relative; width: 100%; max-height: none; margin-top: 12px; }
   .hint { position: static; }
 }
@@ -124,3 +122,20 @@ tr.old td:first-child { text-decoration: line-through; text-decoration-color: va
   text-underline-offset: 3px; }
 .cite:hover { text-decoration-color: var(--chalk); }
 .map { height: calc(100vh - 210px); }
+
+/* Two panes side by side, sized to the screen so nothing needs page scrolling */
+.split { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); gap: 20px;
+  height: calc(100vh - 210px); min-height: 520px; margin-top: 12px; }
+.split .map { height: 100%; min-height: 0; margin-top: 0; }
+.split .graph { inset: 0; }
+.col { display: flex; flex-direction: column; gap: 16px; min-height: 0; }
+.col .titleblock { position: static; width: 100%; }
+.split .pane { flex: 1; min-height: 0; overflow-y: auto; max-width: none; margin: 0; }
+.split .tablepane { background: var(--paper-deep); border: 1.5px solid var(--line); }
+.split .tablepane table { border: 0; }
+.split .doc { padding: 4px 24px 20px; font-size: 0.95rem; }
+.split .doc h2 { font-size: 1.5rem; }
+@media (max-width: 860px) {
+  .split { display: block; height: auto; }
+  .split .pane { margin-top: 12px; }
+}

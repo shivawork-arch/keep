@@ -3,16 +3,15 @@
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 import ReactMarkdown from "react-markdown";
 import Graph from "@/components/Graph";
-import { ask, get, type AskAnswer, type GraphEdge, type GraphNode, type LedgerEntry, type Stats } from "@/lib/api";
+import { ask, get, type AskAnswer, type GraphEdge, type GraphNode, type Stats } from "@/lib/api";
 
-const SHEETS = ["Map", "Decisions", "Changes", "Health", "Onboarding"] as const;
+const SHEETS = ["Map & Health", "Decisions & Onboarding"] as const;
 type Sheet = (typeof SHEETS)[number];
 
 export default function Dashboard() {
-  const [sheet, setSheet] = useState<Sheet>("Map");
+  const [sheet, setSheet] = useState<Sheet>("Map & Health");
   const [stats, setStats] = useState<Stats | null>(null);
   const [graph, setGraph] = useState<{ nodes: GraphNode[]; edges: GraphEdge[] } | null>(null);
-  const [ledger, setLedger] = useState<LedgerEntry[]>([]);
   const [health, setHealth] = useState("");
   const [onboarding, setOnboarding] = useState("");
   const [selected, setSelected] = useState<GraphNode | null>(null);
@@ -25,7 +24,7 @@ export default function Dashboard() {
     e.preventDefault();
     const q = question.trim();
     if (q.length < 3 || asking) return;
-    setAsking(true); setSelected(null); setSheet("Map");
+    setAsking(true); setSelected(null); setSheet("Map & Health");
     try {
       setReply({ q, a: await ask(q) });
       load(); // the call shows up in today's Claude count
@@ -39,14 +38,13 @@ export default function Dashboard() {
   const load = useCallback(async () => {
     try {
       setError("");
-      const [s, g, l, h, o] = await Promise.all([
+      const [s, g, h, o] = await Promise.all([
         get<Stats>("/stats"),
         get<{ nodes: GraphNode[]; edges: GraphEdge[] }>("/graph"),
-        get<LedgerEntry[]>("/ledger"),
         get<{ markdown: string }>("/health-report"),
         get<{ markdown: string }>("/onboarding"),
       ]);
-      setStats(s); setGraph(g); setLedger(l); setHealth(h.markdown); setOnboarding(o.markdown);
+      setStats(s); setGraph(g); setHealth(h.markdown); setOnboarding(o.markdown);
     } catch (e) {
       setError(`Can't reach the KEEP API at localhost:8000 (${(e as Error).message}). Start uvicorn, then refresh.`);
     }
@@ -80,7 +78,8 @@ export default function Dashboard() {
 
       {error && <p className="error">{error}</p>}
 
-      {sheet === "Map" && graph && (
+      {sheet === "Map & Health" && graph && (
+        <div className="split">
         <section className="map" aria-label="Decision map">
           {!selected && !reply && <p className="hint">Files on the left, people on the right, decisions between them. Click any mark.</p>}
           <Graph nodes={graph.nodes} edges={graph.edges} onSelect={onSelect}
@@ -88,12 +87,17 @@ export default function Dashboard() {
           {selected && <Callout n={selected} onClose={() => setSelected(null)} />}
           {!selected && reply && <Answer r={reply} onClose={() => setReply(null)}
             onOpen={(id) => setSelected(graph.nodes.find((n) => n.id === id) ?? null)} />}
-          {stats && !selected && !reply && <TitleBlock s={stats} />}
         </section>
+        <div className="col">
+          {stats && <TitleBlock s={stats} />}
+          <section className="doc pane" aria-label="Health report"><ReactMarkdown>{health}</ReactMarkdown></section>
+        </div>
+        </div>
       )}
 
-      {sheet === "Decisions" && (
-        <section className="page">
+      {sheet === "Decisions & Onboarding" && (
+        <div className="split">
+        <section className="pane tablepane" aria-label="Decisions">
           <table>
             <thead><tr><th>ID</th><th>Decision</th><th>Rule for future code</th><th>Confidence</th><th>Files</th></tr></thead>
             <tbody>
@@ -109,28 +113,9 @@ export default function Dashboard() {
             </tbody>
           </table>
         </section>
+        <section className="doc pane" aria-label="Onboarding guide"><ReactMarkdown>{onboarding}</ReactMarkdown></section>
+        </div>
       )}
-
-      {sheet === "Changes" && (
-        <section className="page">
-          <table>
-            <thead><tr><th>Commit</th><th>Branch</th><th>Author</th><th>Areas</th><th>Risk</th><th>What changed</th></tr></thead>
-            <tbody>
-              {ledger.map((c) => (
-                <tr key={c.id}>
-                  <td className="mono">{c.id}</td><td>{c.branch}</td><td>{c.authors.join(", ")}</td>
-                  <td>{c.domains.join(", ")}</td><td className={`risk-${c.breaking_risk}`}>{c.breaking_risk.toLowerCase()}</td>
-                  <td>{c.summary}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          {!ledger.length && <p className="hint">No pushes recorded yet. The next push to the repo appears here.</p>}
-        </section>
-      )}
-
-      {sheet === "Health" && <section className="page doc"><ReactMarkdown>{health}</ReactMarkdown></section>}
-      {sheet === "Onboarding" && <section className="page doc"><ReactMarkdown>{onboarding}</ReactMarkdown></section>}
     </main>
   );
 }

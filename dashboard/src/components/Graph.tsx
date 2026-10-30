@@ -103,7 +103,7 @@ export default function Graph({ nodes, edges, onSelect, highlight }: {
     if (!cy) return;
     cy.elements().removeClass("faded lit");
     if (!highlight?.length) return;
-    const hit = cy.collection(highlight.map((id) => cy.getElementById(id)).filter((e) => e.nonempty()));
+    const hit = highlight.reduce((acc, id) => acc.union(cy.getElementById(id)), cy.collection());
     if (hit.empty()) return;
     cy.elements().addClass("faded");
     hit.closedNeighborhood().removeClass("faded");
@@ -128,15 +128,13 @@ export default function Graph({ nodes, edges, onSelect, highlight }: {
         ],
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         style: STYLE as any,
-        layout: { name: "preset", fit: true, padding: 70 },
+        layout: { name: "preset", fit: true, padding: 40 },
         wheelSensitivity: 0.3,
         minZoom: 0.3,
         maxZoom: 2.2,
       });
       cyRef.current = cy;
-      if (cy.zoom() > 1.1) { cy.zoom(1.1); cy.center(); }
-      // Leave the bottom-right corner clear for the title block on wide screens.
-      if (box.current.clientWidth > 860) cy.panBy({ x: -140, y: -50 });
+      if (cy.zoom() > 1.8) { cy.zoom(1.8); cy.center(); }
       cy.on("tap", "node", (evt) => {
         const n = evt.target;
         cy!.elements().addClass("faded").removeClass("lit");
